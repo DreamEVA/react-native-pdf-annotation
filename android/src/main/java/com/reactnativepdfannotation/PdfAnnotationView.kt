@@ -1044,4 +1044,217 @@ open class PdfAnnotationView @JvmOverloads constructor(
         backup.delete()
         file.renameTo(backup)
     }
+
+    class AnnotationStroke(
+        val pageIndex: Int,
+        val color: Int,
+        val width: Float
+    ) {
+        val normalizedPoints = ArrayList<PointF>()
+        var timestamp: Long = System.currentTimeMillis()
+    }
+
+    private inner class SafePdfView(context: Context) : PDFView(context, null) {
+        private var lastWidth = 0
+        private var lastHeight = 0
+        private var lastTapUpTime = 0L
+        private var lastTapX = 0f
+        private var lastTapY = 0f
+        private var downX = 0f
+        private var downY = 0f
+        private val doubleTapTimeout: Int
+        private val doubleTapSlop: Int
+        private val touchSlop: Int
+
+        init {
+            val config = ViewConfiguration.get(context)
+            doubleTapTimeout = ViewConfiguration.getDoubleTapTimeout()
+            doubleTapSlop = config.scaledDoubleTapSlop
+            touchSlop = config.scaledTouchSlop
+        }
+
+        override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+            if ((w > 0 && h > 0) || lastWidth > 0 || lastHeight > 0) {
+                super.onSizeChanged(w, h, lastWidth, lastHeight)
+                lastWidth = w
+                lastHeight = h
+            }
+        }
+
+        override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+            if (event.actionMasked == MotionEvent.ACTION_DOWN && event.pointerCount == 1) {
+                downX = event.x
+                downY = event.y
+            }
+
+            if (event.actionMasked == MotionEvent.ACTION_UP && event.pointerCount == 1) {
+                val tapDx = event.x - downX
+                val tapDy = event.y - downY
+                val isTap = tapDx * tapDx + tapDy * tapDy <= touchSlop * touchSlop
+                if (!isTap) {
+                    lastTapUpTime = 0
+                    return super.dispatchTouchEvent(event)
+                }
+
+                val now = event.eventTime
+                val dx = event.x - lastTapX
+                val dy = event.y - lastTapY
+                val isDoubleTap = lastTapUpTime > 0 &&
+                        now - lastTapUpTime <= doubleTapTimeout &&
+                        dx * dx + dy * dy <= doubleTapSlop * doubleTapSlop
+
+                if (isDoubleTap) {
+                    lastTapUpTime = 0
+                    cancelPdfViewGesture(event)
+                    handleCustomDoubleTap(event.x, event.y)
+                    return true
+                }
+
+                lastTapUpTime = now
+                lastTapX = event.x
+                lastTapY = event.y
+            }
+
+            if (event.actionMasked == MotionEvent.ACTION_CANCEL || event.pointerCount > 1) {
+                lastTapUpTime = 0
+            }
+
+            return super.dispatchTouchEvent(event)
+        }
+
+        private fun cancelPdfViewGesture(sourceEvent: MotionEvent) {
+            val cancelEvent = MotionEvent.obtain(sourceEvent)
+            cancelEvent.action = MotionEvent.ACTION_CANCEL
+            super.dispatchTouchEvent(cancelEvent)
+            cancelEvent.recycle()
+        }
+
+        private fun handleCustomDoubleTap(x: Float, y: Float) {
+            if (!isPdfViewReady()) return
+
+            val currentZoom = zoom
+            val midZoom = (minScale + maxScale) / 2f
+            val targetZoom = when {
+                currentZoom < midZoom -> midZoom
+                currentZoom < maxScale -> maxScale
+                else -> initialScale
+            }.coerceIn(minScale, maxScale)
+
+            stopFling()
+            zoomWithAnimation(x, y, targetZoom)
+        }
+    }
+
+    private inner class AnnotationOverlay(context: Context) : View(context) {
+        private val paint = Paint()
+
+        init {
+            paint.style = Paint.Style.STROKE
+            paint.isAntiAlias = true
+            paint.strokeCap = Paint.Cap.ROUND
+            paint.strokeJoin = Paint.Join.ROUND
+        }
+
+        override fun onDraw(canvas: Canvas) {
+            val view = pdfView
+            if (isPaused || !isAttachedToWindow || view == null || view.isRecycled) {
+                return
+            }
+            super.onDraw(canvas)
+            if (isPaused || totalPages <= 0 || view.isRecycled) return
+
+            for (strokes in pageAnnotations.values) {
+                for (stroke in strokes) {
+                    drawStroke(canvas, stroke)
+                }
+            }
+
+            val current = currentStroke
+            if (current != null && current.normalizedPoints.size > 1) {
+                drawStroke(canvas, current)
+            }
+        }
+
+        private fun drawStroke(canvas: Canvas, stroke: AnnotationStroke) {
+            val view = pdfView ?: return
+            if (!isPdfViewReady()) return
+            if (stroke.normalizedPoints.size < 2) return
+
+            paint.color = stroke.color
+            paint.strokeWidth = stroke.width * view.zoom
+
+            val path = Path()
+            var started = false
+
+            for (point in stroke.normalizedPoints) {
+                val screenPoint = normalizedToScreen(stroke.pageIndex, point.x, point.y) ?: continue
+                if (!started) {
+                    path.moveTo(screenPoint.x, screenPoint.y)
+                    started = true
+                } else {
+                    path.lineTo(screenPoint.x, screenPoint.y)
+                }
+            }
+
+            if (started) {
+                canvas.drawPath(path, paint)
+            }
+        }
+
+        override fun onTouchEvent(event: MotionEvent): Boolean {
+            val view = pdfView
+            if (!isPdfViewReady() || view == null) {
+                currentStroke = null
+                return false
+            }
+            if (!isAnnotationMode) {
+                return false
+            }
+
+            if (event.pointerCount > 1) {
+                if (currentStroke != null) {
+                    currentStroke = null
+                    invalidate()
+                }
+                return view.dispatchTouchEvent(event)
+            }
+
+            val x = event.x
+            val y = event.y
+
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    val pageIndex = intArrayOf(currentPage)
+                    val normalized = screenToNormalized(x, y, pageIndex)
+                    if (normalized != null) {
+                        val stroke = AnnotationStroke(pageIndex[0], strokeColor, strokeWidth)
+                        stroke.normalizedPoints.add(normalized)
+                        currentStroke = stroke
+                    }
+                    return true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val current = currentStroke
+                    if (current != null) {
+                        val movePageIndex = intArrayOf(current.pageIndex)
+                        val normalized = screenToNormalized(x, y, movePageIndex)
+                        if (normalized != null && movePageIndex[0] == current.pageIndex) {
+                            current.normalizedPoints.add(normalized)
+                            invalidate()
+                        }
+                    }
+                }
+                MotionEvent.ACTION_UP -> {
+                    val current = currentStroke
+                    if (current != null && current.normalizedPoints.size > 1) {
+                        commitStroke(current)
+                    }
+                    currentStroke = null
+                    invalidate()
+                }
+            }
+
+            return true
+        }
+    }
 }
