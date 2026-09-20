@@ -53,38 +53,38 @@ class PdfAnnotationViewManager : SimpleViewManager<PdfAnnotationView>() {
     }
 
     @ReactProp(name = "filePath")
-    fun setFilePath(view: PdfAnnotationView, filePath: String) {
-        view.loadPdf(filePath)
+    fun setFilePath(view: PdfAnnotationView, filePath: String?) {
+        filePath?.let { view.loadPdf(it) }
     }
 
     @ReactProp(name = "annotationMode", defaultBoolean = false)
-    fun setAnnotationMode(view: PdfAnnotationView, annotationMode: Boolean) {
-        view.setAnnotationMode(annotationMode)
+    fun setAnnotationMode(view: PdfAnnotationView, annotationMode: Boolean?) {
+        view.setAnnotationMode(annotationMode ?: false)
     }
 
     @ReactProp(name = "strokeColor")
-    fun setStrokeColor(view: PdfAnnotationView, color: String) {
-        view.setStrokeColor(color)
+    fun setStrokeColor(view: PdfAnnotationView, color: String?) {
+        color?.let { view.setStrokeColor(it) }
     }
 
     @ReactProp(name = "strokeWidth", defaultFloat = 5f)
-    fun setStrokeWidth(view: PdfAnnotationView, width: Float) {
-        view.setStrokeWidth(width)
+    fun setStrokeWidth(view: PdfAnnotationView, width: Float?) {
+        view.setStrokeWidth(width ?: 5f)
     }
 
     @ReactProp(name = "minScale", defaultFloat = 1.0f)
-    fun setMinScale(view: PdfAnnotationView, scale: Float) {
-        view.setMinScale(scale)
+    fun setMinScale(view: PdfAnnotationView, scale: Float?) {
+        view.setMinScale(scale ?: 1.0f)
     }
 
     @ReactProp(name = "maxScale", defaultFloat = 5.0f)
-    fun setMaxScale(view: PdfAnnotationView, scale: Float) {
-        view.setMaxScale(scale)
+    fun setMaxScale(view: PdfAnnotationView, scale: Float?) {
+        view.setMaxScale(scale ?: 5.0f)
     }
 
     @ReactProp(name = "scale", defaultFloat = 1.0f)
-    fun setScale(view: PdfAnnotationView, scale: Float) {
-        view.setInitialScale(scale)
+    fun setScale(view: PdfAnnotationView, scale: Float?) {
+        view.setInitialScale(scale ?: 1.0f)
     }
 
     override fun getExportedCustomDirectEventTypeConstants(): MutableMap<String, Any>? =
