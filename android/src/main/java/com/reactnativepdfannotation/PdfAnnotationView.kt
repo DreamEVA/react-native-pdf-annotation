@@ -646,4 +646,145 @@ open class PdfAnnotationView @JvmOverloads constructor(
             view.jumpTo(pageIndex, false)
         }
     }
+
+    fun exportPdf(exportPath: String) {
+        val path = currentPdfPath
+        if (path == null) {
+            Log.w(TAG, "exportPdf: no PDF loaded")
+            sendExportPdfResult(false, "No PDF loaded", null)
+            return
+        }
+
+        if (pageAnnotations.isEmpty()) {
+            IO_EXECUTOR.submit {
+                try {
+                    val src = File(path)
+                    val dst = File(exportPath)
+                    dst.parentFile?.let { if (!it.exists()) it.mkdirs() }
+                    copyFile(src, dst)
+                    sendExportPdfResult(true, "No annotations, original PDF copied", dst.absolutePath)
+                } catch (e: IOException) {
+                    Log.e(TAG, "exportPdf copy failed", e)
+                    sendExportPdfResult(false, e.message ?: "", null)
+                }
+            }
+            return
+        }
+
+        val snapshot = snapshotAnnotations()
+        val srcPath = path
+        val viewWidthPxSnapshot = getPdfViewWidthOrDefault()
+
+        IO_EXECUTOR.submit {
+            var pdfDoc: PdfDocument? = null
+            try {
+                val dstFile = File(exportPath)
+                dstFile.parentFile?.let { if (!it.exists()) it.mkdirs() }
+
+                val tmpFile = File(dstFile.parent, dstFile.name + ".tmp")
+
+                val readerProps = ReaderProperties()
+                val reader = PdfReader(srcPath, readerProps)
+                reader.setUnethicalReading(true)
+                val writer = PdfWriter(tmpFile.absolutePath)
+                pdfDoc = PdfDocument(reader, writer)
+
+                val pageCount = pdfDoc.numberOfPages
+
+                for ((pageIndex, strokes) in snapshot) {
+                    val iTextPageNum = pageIndex + 1
+
+                    if (iTextPageNum < 1 || iTextPageNum > pageCount) {
+                        Log.w(TAG, "exportPdf: pageIndex $pageIndex out of range, skipped")
+                        continue
+                    }
+                    if (strokes.isEmpty()) continue
+
+                    val page = pdfDoc.getPage(iTextPageNum)
+                    val mediaBox: Rectangle = page.mediaBox
+                    val pageWidthPt = mediaBox.width
+                    val pageHeightPt = mediaBox.height
+
+                    val pdfCanvas = PdfCanvas(page.newContentStreamAfter(), page.resources, pdfDoc)
+                    val viewWidthPx = viewWidthPxSnapshot
+
+                    for (stroke in strokes) {
+                        val pts = stroke.normalizedPoints
+                        if (pts.size < 2) continue
+
+                        val argb = stroke.color
+                        val alpha = ((argb shr 24) and 0xFF) / 255f
+                        val r = ((argb shr 16) and 0xFF) / 255f
+                        val g = ((argb shr 8) and 0xFF) / 255f
+                        val b = (argb and 0xFF) / 255f
+
+                        val strokeWidthPt = maxOf(0.5f, (stroke.width / viewWidthPx) * pageWidthPt)
+
+                        pdfCanvas.saveState()
+
+                        pdfCanvas.setStrokeColor(DeviceRgb(r, g, b))
+                        if (alpha < 1f) {
+                            val gs = PdfExtGState()
+                            gs.strokeOpacity = alpha
+                            pdfCanvas.setExtGState(gs)
+                        }
+                        pdfCanvas.setLineWidth(strokeWidthPt)
+                        pdfCanvas.setLineCapStyle(PdfCanvasConstants.LineCapStyle.ROUND)
+                        pdfCanvas.setLineJoinStyle(PdfCanvasConstants.LineJoinStyle.ROUND)
+
+                        val first = pts[0]
+                        val startX = first.x * pageWidthPt
+                        val startY = pageHeightPt * (1f - first.y)
+                        pdfCanvas.moveTo(startX, startY)
+
+                        if (pts.size == 2) {
+                            val p1 = pts[1]
+                            pdfCanvas.lineTo(p1.x * pageWidthPt, pageHeightPt * (1f - p1.y))
+                        } else {
+                            for (i in 1 until pts.size - 1) {
+                                val p0 = pts[i - 1]
+                                val p1 = pts[i]
+                                val p2 = pts[i + 1]
+
+                                val cp1x = (p0.x + p1.x) / 2f * pageWidthPt
+                                val cp1y = pageHeightPt * (1f - (p0.y + p1.y) / 2f)
+                                val cp2x = (p1.x + p2.x) / 2f * pageWidthPt
+                                val cp2y = pageHeightPt * (1f - (p1.y + p2.y) / 2f)
+
+                                pdfCanvas.curveTo(cp1x, cp1y, cp2x, cp2y, cp2x, cp2y)
+                            }
+                            val last = pts[pts.size - 1]
+                            pdfCanvas.lineTo(last.x * pageWidthPt, pageHeightPt * (1f - last.y))
+                        }
+
+                        pdfCanvas.stroke()
+                        pdfCanvas.restoreState()
+                    }
+
+                    pdfCanvas.release()
+                }
+
+                pdfDoc.close()
+                pdfDoc = null
+
+                if (!tmpFile.renameTo(dstFile)) {
+                    copyFile(tmpFile, dstFile)
+                    tmpFile.delete()
+                }
+
+                Log.d(TAG, "exportPdf success -> ${dstFile.absolutePath}")
+                sendExportPdfResult(true, "Export successful", dstFile.absolutePath)
+            } catch (e: Exception) {
+                Log.e(TAG, "exportPdf failed", e)
+                sendExportPdfResult(false, e.message ?: "", null)
+            } finally {
+                pdfDoc?.let { doc ->
+                    try {
+                        doc.close()
+                    } catch (ignored: Exception) {
+                    }
+                }
+            }
+        }
+    }
 }
