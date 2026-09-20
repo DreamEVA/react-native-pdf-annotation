@@ -1,0 +1,3 @@
+-keep class com.reactnativepdfannotation.** { *; }
+-keep class com.shockwave.** { *; }
+-keep class com.itextpdf.** { *; }
