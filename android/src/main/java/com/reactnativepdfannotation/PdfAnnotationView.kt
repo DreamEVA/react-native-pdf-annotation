@@ -32,7 +32,6 @@ import com.github.barteksc.pdfviewer.util.FitPolicy
 import com.itextpdf.kernel.colors.DeviceRgb
 import com.itextpdf.kernel.geom.Rectangle
 import com.itextpdf.kernel.pdf.PdfDocument
-import com.itextpdf.kernel.pdf.PdfPage
 import com.itextpdf.kernel.pdf.PdfReader
 import com.itextpdf.kernel.pdf.PdfWriter
 import com.itextpdf.kernel.pdf.ReaderProperties
@@ -854,6 +853,7 @@ open class PdfAnnotationView @JvmOverloads constructor(
         if (bookmarks == null) return result
 
         for (bookmark in bookmarks) {
+            if (bookmark == null) continue
             val item = Arguments.createMap()
             item.putString("title", bookmark.title ?: "")
             item.putInt("page", bookmark.pageIdx.toInt())
