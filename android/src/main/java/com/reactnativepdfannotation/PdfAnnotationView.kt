@@ -541,4 +541,109 @@ open class PdfAnnotationView @JvmOverloads constructor(
 
         return PointF(screenX, screenY)
     }
+
+    private fun commitStroke(stroke: AnnotationStroke) {
+        val list = pageAnnotations.getOrPut(stroke.pageIndex) { ArrayList() }
+        list.add(stroke)
+
+        redoStack.clear()
+
+        undoStack.push(stroke)
+        if (undoStack.size > MAX_HISTORY) {
+            undoStack.pollLast()
+        }
+
+        scheduleAutoSave()
+        sendAnnotationChanged()
+    }
+
+    fun undo() {
+        if (undoStack.isEmpty()) return
+
+        val stroke = undoStack.pop()
+
+        val strokes = pageAnnotations[stroke.pageIndex]
+        if (strokes != null) {
+            for (i in strokes.indices.reversed()) {
+                if (strokes[i] === stroke) {
+                    strokes.removeAt(i)
+                    break
+                }
+            }
+            if (strokes.isEmpty()) {
+                pageAnnotations.remove(stroke.pageIndex)
+            }
+        }
+
+        redoStack.push(stroke)
+        annotationOverlay?.invalidate()
+        scheduleAutoSave()
+        sendAnnotationChanged()
+    }
+
+    fun redo() {
+        if (redoStack.isEmpty()) return
+
+        val stroke = redoStack.pop()
+
+        val list = pageAnnotations.getOrPut(stroke.pageIndex) { ArrayList() }
+        list.add(stroke)
+
+        undoStack.push(stroke)
+        annotationOverlay?.invalidate()
+        scheduleAutoSave()
+        sendAnnotationChanged()
+    }
+
+    fun clearAll() {
+        pageAnnotations.clear()
+        undoStack.clear()
+        redoStack.clear()
+        annotationOverlay?.invalidate()
+        deleteAnnotationFile()
+        sendAnnotationChanged()
+    }
+
+    fun exportAnnotations(exportDir: String) {
+        val path = currentPdfPath
+        if (path == null) {
+            Log.w(TAG, "No PDF loaded, cannot export")
+            sendExportResult(false, "No PDF loaded")
+            return
+        }
+
+        val snapshot = snapshotAnnotations()
+        val viewWidthPx = getPdfViewWidthOrDefault()
+
+        IO_EXECUTOR.submit {
+            try {
+                val dir = File(exportDir)
+                if (!dir.exists()) {
+                    dir.mkdirs()
+                }
+
+                val json = AnnotationPersistence.toJsonNormalized(path, snapshot, viewWidthPx)
+                val fileName = File(path).name + ".ann.json"
+                val exportFile = File(dir, fileName)
+
+                FileWriter(exportFile, false).use { fw ->
+                    fw.write(json)
+                    fw.flush()
+                }
+
+                Log.d(TAG, "Exported annotations to: ${exportFile.absolutePath}")
+                sendExportResult(true, exportFile.absolutePath)
+            } catch (e: IOException) {
+                Log.e(TAG, "Export annotations failed", e)
+                sendExportResult(false, e.message ?: "")
+            }
+        }
+    }
+
+    fun setPage(pageIndex: Int) {
+        val view = pdfView
+        if (isPdfViewReady() && view != null) {
+            view.jumpTo(pageIndex, false)
+        }
+    }
 }
