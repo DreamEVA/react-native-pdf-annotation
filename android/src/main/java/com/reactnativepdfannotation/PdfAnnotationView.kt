@@ -787,4 +787,133 @@ open class PdfAnnotationView @JvmOverloads constructor(
             }
         }
     }
+
+    @Suppress("DEPRECATION")
+    private fun sendEventToJS(eventName: String, event: WritableMap) {
+        val ctx = reactContext ?: return
+        val viewId = id
+
+        Handler(Looper.getMainLooper()).post {
+            if (viewId == View.NO_ID) {
+                Log.w(TAG, "sendEventToJS: view not attached, dropping event: $eventName")
+                return@post
+            }
+            try {
+                val modernEmitter = ctx.getJSModule(RCTModernEventEmitter::class.java)
+                if (modernEmitter != null) {
+                    modernEmitter.receiveEvent(viewId, eventName, event)
+                } else {
+                    ctx.getJSModule(RCTEventEmitter::class.java).receiveEvent(viewId, eventName, event)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to send event: $eventName", e)
+            }
+        }
+    }
+
+    private fun sendExportPdfResult(success: Boolean, message: String, filePath: String?) {
+        val event = Arguments.createMap()
+        event.putBoolean("success", success)
+        event.putString("message", message)
+        filePath?.let { event.putString("filePath", it) }
+        sendEventToJS("onExportPdfResult", event)
+    }
+
+    private fun sendLoadComplete(nbPages: Int, filePath: String) {
+        val view = pdfView
+        val pageSize: SizeF? = if (isPdfViewReady() && view != null) view.getPageSize(0) else null
+
+        val event = Arguments.createMap()
+        event.putInt("pageCount", nbPages)
+        event.putString("filePath", filePath)
+        event.putDouble("width", (pageSize?.width ?: 0f).toDouble())
+        event.putDouble("height", (pageSize?.height ?: 0f).toDouble())
+
+        sendEventToJS("onLoadComplete", event)
+    }
+
+    private fun sendTableOfContents(sourceView: PDFView, filePath: String) {
+        val event = Arguments.createMap()
+        event.putString("filePath", filePath)
+
+        var tableOfContents: WritableArray = Arguments.createArray()
+        try {
+            if (!sourceView.isRecycled) {
+                tableOfContents = createTableOfContentsArray(sourceView.tableOfContents)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "sendTableOfContents: failed to read table of contents: ${e.message}")
+        }
+
+        event.putArray("tableOfContents", tableOfContents)
+        sendEventToJS("onTableOfContents", event)
+    }
+
+    private fun createTableOfContentsArray(bookmarks: List<Bookmark>?): WritableArray {
+        val result = Arguments.createArray()
+        if (bookmarks == null) return result
+
+        for (bookmark in bookmarks) {
+            val item = Arguments.createMap()
+            item.putString("title", bookmark.title ?: "")
+            item.putInt("page", bookmark.pageIdx.toInt())
+            item.putInt("pageNumber", bookmark.pageIdx.toInt() + 1)
+            item.putArray("children", createTableOfContentsArray(bookmark.children))
+            result.pushMap(item)
+        }
+
+        return result
+    }
+
+    private fun sendPageChanged(page: Int, pageCount: Int) {
+        val event = Arguments.createMap()
+        event.putInt("page", page)
+        event.putInt("pageCount", pageCount)
+
+        sendEventToJS("onPageChanged", event)
+    }
+
+    private fun sendError(message: String) {
+        val event = Arguments.createMap()
+        event.putString("message", message)
+        sendEventToJS("onError", event)
+    }
+
+    private fun sendAnnotationChanged() {
+        val path = currentPdfPath ?: return
+
+        val snapshot = snapshotAnnotations()
+        val viewWidthPx = getPdfViewWidthOrDefault()
+
+        IO_EXECUTOR.submit {
+            val json = AnnotationPersistence.toJsonNormalized(path, snapshot, viewWidthPx)
+
+            val event = Arguments.createMap()
+            event.putString("data", json)
+
+            sendEventToJS("onAnnotationChanged", event)
+        }
+    }
+
+    private fun sendExportResult(success: Boolean, message: String) {
+        val event = Arguments.createMap()
+        event.putBoolean("success", success)
+        event.putString("message", message)
+
+        sendEventToJS("onExportResult", event)
+    }
+
+    private fun copyFile(src: File, dst: File) {
+        FileInputStream(src).use { fis ->
+            FileOutputStream(dst).use { fos ->
+                val buf = ByteArray(8192)
+                var len = fis.read(buf)
+                while (len != -1) {
+                    fos.write(buf, 0, len)
+                    len = fis.read(buf)
+                }
+                fos.flush()
+            }
+        }
+    }
 }
