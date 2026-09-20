@@ -1,3 +1,6 @@
 node_modules/
 *.tgz
 npm-debug.log*
+android/build/
+android/.gradle/
+local.properties
