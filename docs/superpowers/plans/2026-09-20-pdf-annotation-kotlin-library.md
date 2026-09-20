@@ -796,24 +796,26 @@ open class PdfAnnotationView @JvmOverloads constructor(
         listenerRef[0] = listener
         targetView.addOnLayoutChangeListener(listener)
 
-        val retry = Runnable {
-            if (executed) return@Runnable
-            if (isPaused || pdfView !== targetView) {
-                targetView.removeOnLayoutChangeListener(listener)
-                return@Runnable
-            }
-            if (ensurePdfViewHasSize(targetView, source)) {
-                Log.i(TAG, "$source: PDFView layout ready after retry, size=${targetView.width}x${targetView.height}")
-                executeOnce.run()
-                return@Runnable
-            }
-            retryCount++
-            if (retryCount <= 20) {
-                requestLayout()
-                targetView.requestLayout()
-                targetView.postDelayed(this, 50)
-            } else {
-                Log.w(TAG, "$source: PDFView layout wait timeout, skip loading with size=${targetView.width}x${targetView.height}, parent=${width}x$height")
+        val retry = object : Runnable {
+            override fun run() {
+                if (executed) return
+                if (isPaused || pdfView !== targetView) {
+                    targetView.removeOnLayoutChangeListener(listener)
+                    return
+                }
+                if (ensurePdfViewHasSize(targetView, source)) {
+                    Log.i(TAG, "$source: PDFView layout ready after retry, size=${targetView.width}x${targetView.height}")
+                    executeOnce.run()
+                    return
+                }
+                retryCount++
+                if (retryCount <= 20) {
+                    requestLayout()
+                    targetView.requestLayout()
+                    targetView.postDelayed(this, 50)
+                } else {
+                    Log.w(TAG, "$source: PDFView layout wait timeout, skip loading with size=${targetView.width}x${targetView.height}, parent=${width}x$height")
+                }
             }
         }
         targetView.post(retry)
