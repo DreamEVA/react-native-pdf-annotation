@@ -335,4 +335,128 @@ open class PdfAnnotationView @JvmOverloads constructor(
         view.loadPages()
         view.invalidate()
     }
+
+    private fun startPdfLoadWhenMeasured(loadingView: PDFView, file: File, defaultPage: Int,
+                                         isReload: Boolean, source: String, filePathForEvent: String) {
+        runWhenPdfViewMeasured(loadingView, source, Runnable {
+            if (isPaused || pdfView !== loadingView) return@Runnable
+
+            loadingView.fromFile(file)
+                .defaultPage(defaultPage)
+                .enableSwipe(true)
+                .swipeHorizontal(false)
+                .enableDoubletap(false)
+                .enableAnnotationRendering(true)
+                .enableAntialiasing(true)
+                .pageFitPolicy(FitPolicy.WIDTH)
+                .fitEachPage(true)
+                .spacing(0)
+                .autoSpacing(false)
+                .onPageChange(object : OnPageChangeListener {
+                    override fun onPageChanged(page: Int, pageCount: Int) {
+                        if (isPaused || pdfView !== loadingView || loadingView.isRecycled) return
+                        currentPage = page
+                        totalPages = pageCount
+                        safeInvalidateOverlay()
+                        sendPageChanged(page, pageCount)
+                    }
+                })
+                .onPageScroll(object : OnPageScrollListener {
+                    override fun onPageScrolled(page: Int, positionOffset: Float) {
+                        if (isPaused || pdfView !== loadingView || loadingView.isRecycled) return
+                        safeInvalidateOverlay()
+                    }
+                })
+                .onLoad(object : OnLoadCompleteListener {
+                    override fun loadComplete(nbPages: Int) {
+                        if (isPaused || pdfView !== loadingView || loadingView.isRecycled) return
+                        if (!isReload) {
+                            sendTableOfContents(loadingView, filePathForEvent)
+                        }
+                    }
+                })
+                .onRender(object : OnRenderListener {
+                    override fun onInitiallyRendered(nbPages: Int) {
+                        if (isPaused || pdfView !== loadingView || loadingView.isRecycled) return
+                        totalPages = nbPages
+                        loadingView.setMinZoom(minScale)
+                        loadingView.setMidZoom((minScale + maxScale) / 2)
+                        loadingView.setMaxZoom(maxScale)
+
+                        val zoomToApply = if (isReload && savedZoom > 0f) savedZoom else initialScale
+                        Log.i(TAG, "$source onRender: pages=$nbPages, zoom=$zoomToApply, path=$filePathForEvent")
+                        applyStableZoom(zoomToApply)
+                        if (!isReload) {
+                            loadAnnotationsFromDisk(filePathForEvent)
+                            sendLoadComplete(nbPages, filePathForEvent)
+                        }
+                        safeInvalidateOverlay()
+                    }
+                })
+                .onError(object : OnErrorListener {
+                    override fun onError(t: Throwable) {
+                        Log.e(TAG, "$source onError: ${t.message}", t)
+                        sendError(t.message ?: "Unknown error")
+                    }
+                })
+                .load()
+        })
+    }
+
+    private fun reloadPdf(filePath: String, restorePage: Int) {
+        if (isPaused) return
+        Log.i(TAG, "reloadPdf: path=$filePath, restorePage=$restorePage, savedZoom=$savedZoom")
+        recreatePdfView()
+        val loadingView = pdfView ?: return
+        val file = File(filePath)
+        startPdfLoadWhenMeasured(loadingView, file, restorePage, true, "reloadPdf", filePath)
+
+        layoutChangeListener?.let { loadingView.removeOnLayoutChangeListener(it) }
+        val listener = object : OnLayoutChangeListener {
+            override fun onLayoutChange(v: View, left: Int, top: Int, right: Int, bottom: Int,
+                                        oldLeft: Int, oldTop: Int, oldRight: Int, oldBottom: Int) {
+                safeInvalidateOverlay()
+                val sizeChanged = (right - left) != (oldRight - oldLeft) ||
+                        (bottom - top) != (oldBottom - oldTop)
+                if (sizeChanged && totalPages > 0 && pdfView === loadingView && isPdfViewReady()) {
+                    applyStableZoom(initialScale)
+                }
+            }
+        }
+        layoutChangeListener = listener
+        loadingView.addOnLayoutChangeListener(listener)
+    }
+
+    fun loadPdf(filePath: String) {
+        val normalizedPath = filePath.replace("file://", "")
+
+        currentPdfPath = normalizedPath
+        Log.i(TAG, "loadPdf: path=$normalizedPath")
+
+        pageAnnotations.clear()
+        undoStack.clear()
+        redoStack.clear()
+
+        isPaused = false
+        recreatePdfView()
+        val loadingView = pdfView ?: return
+        val file = File(normalizedPath)
+
+        startPdfLoadWhenMeasured(loadingView, file, 0, false, "loadPdf", normalizedPath)
+
+        layoutChangeListener?.let { loadingView.removeOnLayoutChangeListener(it) }
+        val listener = object : OnLayoutChangeListener {
+            override fun onLayoutChange(v: View, left: Int, top: Int, right: Int, bottom: Int,
+                                        oldLeft: Int, oldTop: Int, oldRight: Int, oldBottom: Int) {
+                safeInvalidateOverlay()
+                val sizeChanged = (right - left) != (oldRight - oldLeft) ||
+                        (bottom - top) != (oldBottom - oldTop)
+                if (sizeChanged && totalPages > 0 && pdfView === loadingView && isPdfViewReady()) {
+                    applyStableZoom(initialScale)
+                }
+            }
+        }
+        layoutChangeListener = listener
+        loadingView.addOnLayoutChangeListener(listener)
+    }
 }
