@@ -51,7 +51,7 @@ import java.util.ArrayDeque
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
-open class PdfAnnotationView @JvmOverloads constructor(
+class PdfAnnotationView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null
 ) : FrameLayout(context, attrs) {

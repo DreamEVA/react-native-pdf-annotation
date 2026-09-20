@@ -74,7 +74,7 @@ import PdfAnnotationView from 'react-native-pdf-annotation';
 | filePath | string | - | PDF 文件路径（file:// 或绝对路径），触发加载 |
 | originalPath | string | - | 公共目录原始路径，批注文件 `{originalPath}.ann.json` 存于其旁 |
 | annotationMode | boolean | false | true 时单指绘制批注，多指仍可缩放/滚动 |
-| strokeColor | string | - | 画笔颜色，如 `#FF0000` |
+| strokeColor | string | 红色(RED) | 画笔颜色，如 `#FF0000` |
 | strokeWidth | number | 5 | 画笔宽度（屏幕像素） |
 | scale | number | 1 | 初始缩放 |
 | minScale | number | 1 | 最小缩放 |
