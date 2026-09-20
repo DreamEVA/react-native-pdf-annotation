@@ -916,4 +916,132 @@ open class PdfAnnotationView @JvmOverloads constructor(
             }
         }
     }
+
+    private fun scheduleAutoSave() {
+        val path = currentPdfPath ?: return
+
+        pendingSaveTask?.let { saveHandler.removeCallbacks(it) }
+
+        val snapshot = snapshotAnnotations()
+        val viewWidthPxSnapshot = getPdfViewWidthOrDefault()
+
+        val task = Runnable {
+            IO_EXECUTOR.submit { saveAnnotationsToDisk(path, snapshot, viewWidthPxSnapshot) }
+        }
+        pendingSaveTask = task
+        saveHandler.postDelayed(task, SAVE_DEBOUNCE_MS)
+    }
+
+    private fun saveAnnotationsToDisk(pdfPath: String, annotations: Map<Int, MutableList<AnnotationStroke>>, viewWidthPx: Float) {
+        try {
+            val json = AnnotationPersistence.toJson(pdfPath, annotations, viewWidthPx)
+            val file = getAnnotationFile(pdfPath)
+
+            val parentDir = file.parentFile
+            if (parentDir != null && !parentDir.exists()) {
+                if (!parentDir.mkdirs()) {
+                    Log.e(TAG, "Save annotations failed: cannot create dir ${parentDir.absolutePath}")
+                    return
+                }
+            }
+
+            val tmp = File(file.parent, file.name + ".tmp")
+            FileWriter(tmp, false).use { fw ->
+                fw.write(json)
+                fw.flush()
+            }
+
+            if (!tmp.renameTo(file)) {
+                FileWriter(file, false).use { fw ->
+                    fw.write(json)
+                    fw.flush()
+                }
+                tmp.delete()
+            }
+
+            Log.d(TAG, "Saved ${annotations.size} pages -> ${file.absolutePath}")
+        } catch (e: IOException) {
+            Log.e(TAG, "Save annotations failed: ${getAnnotationFile(pdfPath).absolutePath}", e)
+        }
+    }
+
+    private fun loadAnnotationsFromDisk(pdfPath: String) {
+        val file = getAnnotationFile(pdfPath)
+        if (!file.exists()) {
+            Log.d(TAG, "No annotation file for: $pdfPath")
+            return
+        }
+
+        try {
+            val json = readFileToString(file)
+            val viewWidthPx = getPdfViewWidthOrDefault()
+            val loaded = AnnotationPersistence.fromJson(json, viewWidthPx)
+            pageAnnotations.putAll(loaded)
+
+            val allStrokes = ArrayList<AnnotationStroke>()
+            for (strokes in loaded.values) {
+                allStrokes.addAll(strokes)
+            }
+
+            allStrokes.sortWith { a, b -> java.lang.Long.compare(a.timestamp, b.timestamp) }
+
+            for (stroke in allStrokes) {
+                undoStack.push(stroke)
+                if (undoStack.size > MAX_HISTORY) {
+                    undoStack.pollLast()
+                }
+            }
+
+            Log.d(TAG, "Loaded ${loaded.size} pages, ${allStrokes.size} strokes from ${file.name}")
+        } catch (e: Exception) {
+            Log.e(TAG, "Load annotations failed, starting fresh", e)
+            backupCorruptedFile(file)
+        }
+    }
+
+    private fun deleteAnnotationFile() {
+        val path = currentPdfPath ?: return
+
+        pendingSaveTask?.let { saveHandler.removeCallbacks(it) }
+        pendingSaveTask = null
+
+        IO_EXECUTOR.submit {
+            val file = getAnnotationFile(path)
+            if (file.exists()) {
+                val deleted = file.delete()
+                Log.d(TAG, "Annotation file deleted: $deleted -> ${file.name}")
+            }
+        }
+    }
+
+    private fun snapshotAnnotations(): Map<Int, MutableList<AnnotationStroke>> {
+        val copy = HashMap<Int, MutableList<AnnotationStroke>>()
+        for ((page, strokes) in pageAnnotations) {
+            copy[page] = ArrayList(strokes)
+        }
+        return copy
+    }
+
+    private fun getAnnotationFile(pdfPath: String): File {
+        val basePath = originalPdfPath ?: pdfPath
+        return File(basePath + ".ann.json")
+    }
+
+    private fun readFileToString(file: File): String {
+        val sb = StringBuilder(file.length().toInt())
+        BufferedReader(FileReader(file)).use { br ->
+            var line = br.readLine()
+            while (line != null) {
+                sb.append(line).append('\n')
+                line = br.readLine()
+            }
+        }
+        return sb.toString()
+    }
+
+    private fun backupCorruptedFile(file: File) {
+        val backup = File(file.parent, file.name + ".corrupt")
+        backup.delete()
+        file.renameTo(backup)
+    }
 }
