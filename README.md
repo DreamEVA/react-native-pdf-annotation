@@ -5,6 +5,8 @@ Kotlin 版 PDF 手写批注原生组件（Android）。基于 AndroidPdfViewer 3
 
 ## 安装
 
+要求：RN ≥ 0.72（AGP ≥ 7.3，Kotlin 1.8+）。本包面向新工程使用，无需改动任何旧 Java 代码。
+
 ```bash
 npm install react-native-pdf-annotation
 # 或本地路径
@@ -15,10 +17,9 @@ autolinking 自动注册原生模块（ReactNative CLI ≥ 0.60）。
 
 ### 宿主工程必须的改动
 
-1. 删除旧 Java 组件（如存在）：`android/app/src/main/java/com/example/originalapp/pdf/` 下的
-   `PdfAnnotationView.java`、`PdfAnnotationViewManager.java`、`PdfAnnotationPackage.java`、
-   `AnnotationPersistence.java`（否则 REACT_CLASS 冲突）。
-2. `MainActivity` 接入生命周期分发（替代原先手写的 View 树遍历）：
+1. 如宿主工程内曾内嵌过同名旧组件（native 视图名 `PdfAnnotationView`），请先删除旧
+   Java/Kotlin 源码，避免 REACT_CLASS 冲突（全新工程无需此步）。
+2. `MainActivity` 接入生命周期分发：
 
 ```java
 import com.reactnativepdfannotation.PdfAnnotationLifecycle;

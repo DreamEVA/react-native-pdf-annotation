@@ -151,16 +151,18 @@ UIManager.dispatchViewManagerCommand(handle, 'setPage', [pageIndex]); // 0 基
 - package.json：`main`/`types`/`react-native` 字段，peerDependencies:
   `react >=17`、`react-native >=0.72`
 
-## 6. 宿主项目集成步骤（原项目）
+## 6. 宿主项目集成步骤
+
+**适用范围（2026-09-20 决策）：本包面向 RN 0.72+ 的新工程（或已升级工程）使用，不修改
+原 RN 0.66 Java 工程。** 原工程的 `PdfViewer/index.js` 业务封装可参考迁移（JS API 不变）。
 
 1. `npm install <本包路径或 npm 包名>`（autolinking 自动注册 Kotlin 模块）
-2. 删除原 Java 目录 4 个文件（PdfAnnotationView.java / PdfAnnotationViewManager.java /
-   PdfAnnotationPackage.java / AnnotationPersistence.java），避免 REACT_CLASS 冲突
-3. `MainActivity.java`：删除 view 树遍历 dispatch 代码，改为调用库的
+2. 如宿主工程曾内嵌同名旧组件（REACT_CLASS `PdfAnnotationView`），删除其旧 Java/Kotlin
+   源码，避免冲突（全新工程无此步骤）
+3. `MainActivity`（Java/Kotlin 均可）调用库的
    `PdfAnnotationLifecycle`（onPause/onStop/onResume/onTrimMemory 各一行）
-4. 删除 `app/components/PdfAnnotationView/index.js`；
-   `PdfViewer/index.js` 中改为 `import PdfAnnotationView from 'react-native-pdf-annotation'`
-5. 其余（PdfViewer 业务封装、Pagination、AnnPdfSaveCallback）不动
+4. JS 侧 `import PdfAnnotationView from 'react-native-pdf-annotation'`
+5. 命令派发、事件、Pagination 等业务封装方式与原版完全一致
 
 ## 7. 风险与缓解
 
