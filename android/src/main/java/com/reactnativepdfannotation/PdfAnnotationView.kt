@@ -249,4 +249,90 @@ open class PdfAnnotationView @JvmOverloads constructor(
 
         releasePdfView("onDetachedFromWindow", false)
     }
+
+    fun onHostPause() {
+        isPaused = true
+        currentStroke = null
+        releasePdfView("onHostPause", true)
+        val view = pdfView
+        Log.i(TAG, "onHostPause: isPaused=true, savedZoom=$savedZoom, page=$currentPage/$totalPages, recycled=${view == null || view.isRecycled}")
+    }
+
+    fun onHostStop() {
+        isPaused = true
+        currentStroke = null
+        releasePdfView("onHostStop", true)
+    }
+
+    fun onHostResume() {
+        isPaused = false
+        val path = currentPdfPath
+        if (path != null) {
+            reloadPdf(path, currentPage)
+        } else {
+            annotationOverlay?.invalidate()
+        }
+    }
+
+    fun onTrimMemory(level: Int) {
+        Log.i(TAG, "onTrimMemory: level=$level, isPaused=$isPaused, recycled=${pdfView?.isRecycled ?: true}")
+        if (level >= ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN) {
+            Log.w(TAG, "onTrimMemory UI_HIDDEN: releasing PDFView, page=$currentPage")
+            recyclePdfViewForMemoryPressure()
+        }
+    }
+
+    private fun recyclePdfViewForMemoryPressure() {
+        isPaused = true
+        pendingSaveTask?.let { saveHandler.removeCallbacks(it) }
+        pendingSaveTask = null
+        currentStroke = null
+        releasePdfView("recyclePdfViewForMemoryPressure", true)
+        Log.w(TAG, "PDF recycled due to memory pressure, will reload on next resume.")
+    }
+
+    fun setAnnotationMode(annotationMode: Boolean) {
+        isAnnotationMode = annotationMode
+        annotationOverlay?.invalidate()
+    }
+
+    fun setStrokeColor(color: String) {
+        strokeColor = try {
+            Color.parseColor(color)
+        } catch (e: Exception) {
+            Color.RED
+        }
+    }
+
+    fun setStrokeWidth(width: Float) {
+        strokeWidth = width
+    }
+
+    fun setMinScale(scale: Float) {
+        minScale = scale
+    }
+
+    fun setMaxScale(scale: Float) {
+        maxScale = scale
+    }
+
+    fun setInitialScale(scale: Float) {
+        initialScale = scale
+        if (totalPages > 0 && isPdfViewReady()) {
+            applyStableZoom(scale)
+        }
+    }
+
+    fun setOriginalPath(originalPath: String?) {
+        originalPdfPath = originalPath?.replace("file://", "")
+    }
+
+    private fun applyStableZoom(scale: Float) {
+        val view = pdfView ?: return
+        if (!isPdfViewReady()) return
+        view.stopFling()
+        view.zoomTo(scale)
+        view.loadPages()
+        view.invalidate()
+    }
 }
