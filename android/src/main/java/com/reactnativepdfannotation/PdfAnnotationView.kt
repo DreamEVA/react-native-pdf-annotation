@@ -459,4 +459,86 @@ open class PdfAnnotationView @JvmOverloads constructor(
         layoutChangeListener = listener
         loadingView.addOnLayoutChangeListener(listener)
     }
+
+    private fun getPageOffsetY(pageIndex: Int): Float {
+        val view = pdfView ?: return 0f
+        if (!isPdfViewReady()) return 0f
+        var offset = 0f
+        var i = 0
+        while (i < pageIndex && i < totalPages) {
+            offset += view.getPageSize(i).height
+            i++
+        }
+        return offset
+    }
+
+    private fun screenToNormalized(screenX: Float, screenY: Float, outPageIndex: IntArray?): PointF? {
+        val view = pdfView ?: return null
+        if (!isPdfViewReady()) return null
+        val zoom = view.zoom
+        if (totalPages <= 0 || zoom <= 0) return null
+
+        val offsetX = view.currentXOffset
+        val offsetY = view.currentYOffset
+
+        val docX = (screenX - offsetX) / zoom
+        val docY = (screenY - offsetY) / zoom
+
+        var targetPage = currentPage
+        var pageStartY = 0f
+
+        for (i in 0 until totalPages) {
+            val pageHeight = view.getPageSize(i).height
+            if (docY >= pageStartY && docY < pageStartY + pageHeight) {
+                targetPage = i
+                break
+            }
+            pageStartY += pageHeight
+        }
+
+        val targetSize = view.getPageSize(targetPage)
+        val pageWidth = targetSize.width
+        val pageHeight = targetSize.height
+        val targetPageStartY = getPageOffsetY(targetPage)
+
+        var normalizedX = docX / pageWidth
+        var normalizedY = (docY - targetPageStartY) / pageHeight
+
+        if (normalizedX < -0.05f || normalizedX > 1.05f ||
+            normalizedY < -0.05f || normalizedY > 1.05f) {
+            return null
+        }
+
+        normalizedX = normalizedX.coerceIn(0f, 1f)
+        normalizedY = normalizedY.coerceIn(0f, 1f)
+
+        if (outPageIndex != null && outPageIndex.isNotEmpty()) {
+            outPageIndex[0] = targetPage
+        }
+
+        return PointF(normalizedX, normalizedY)
+    }
+
+    private fun normalizedToScreen(pageIndex: Int, normalizedX: Float, normalizedY: Float): PointF? {
+        val view = pdfView ?: return null
+        if (!isPdfViewReady()) return null
+        if (pageIndex < 0 || pageIndex >= totalPages) return null
+
+        val zoom = view.zoom
+        val offsetX = view.currentXOffset
+        val offsetY = view.currentYOffset
+
+        val pageSize = view.getPageSize(pageIndex)
+        val pageWidth = pageSize.width
+        val pageHeight = pageSize.height
+
+        val pageStartY = getPageOffsetY(pageIndex)
+        val docX = normalizedX * pageWidth
+        val docY = pageStartY + normalizedY * pageHeight
+
+        val screenX = docX * zoom + offsetX
+        val screenY = docY * zoom + offsetY
+
+        return PointF(screenX, screenY)
+    }
 }
