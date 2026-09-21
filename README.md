@@ -1,7 +1,11 @@
 # react-native-pdf-annotation
 
-Kotlin 版 PDF 手写批注原生组件（Android）。基于 AndroidPdfViewer 3.2.0（pdfium）+ iText7，
+Kotlin 版 PDF 手写批注原生组件（Android）。基于 AndroidPdfViewer 3.2.0-beta.1（pdfium）+ iText7，
 支持 RN 0.72+（旧架构/新架构 interop 兼容）。
+
+> 依赖说明：android-pdf-viewer 公开发布的最高版本为 `3.2.0-beta.1`（不存在 3.2.0 正式版），
+> 且仅发布在已关闭的 JCenter 上。本库已内置阿里云镜像仓库
+> （`https://maven.aliyun.com/repository/public/`）用于解析，无需宿主额外配置。
 
 ## 安装
 

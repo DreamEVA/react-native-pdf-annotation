@@ -10,6 +10,7 @@ buildscript {
     }
 
     dependencies {
+        classpath "com.android.tools.build:gradle:${safeExtGet('androidGradlePluginVersion', '8.1.1')}"
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:${safeExtGet('kotlinVersion', '1.8.22')}"
     }
 }
@@ -41,6 +42,7 @@ repositories {
     google()
     mavenCentral()
     maven { url 'https://www.jitpack.io' }
+    maven { url 'https://maven.aliyun.com/repository/public/' }
     def reactNativeAndroidDir = "$rootDir/../node_modules/react-native/android"
     if (file(reactNativeAndroidDir).exists()) {
         maven { url reactNativeAndroidDir }
@@ -49,7 +51,7 @@ repositories {
 
 dependencies {
     implementation 'com.facebook.react:react-android:+'
-    implementation 'com.github.barteksc:android-pdf-viewer:3.2.0'
+    implementation 'com.github.barteksc:android-pdf-viewer:3.2.0-beta.1'
     implementation 'com.itextpdf:itext7-core:7.2.5'
     implementation 'com.google.code.gson:gson:2.10.1'
 }

@@ -100,7 +100,7 @@ react-native-pdf-annotation/
 
 ### 4.5 依赖与 gradle 配置
 
-- `com.github.barteksc:android-pdf-viewer:3.2.0`（正式版，API 与 3.2.0-beta.1 一致）
+- `com.github.barteksc:android-pdf-viewer:3.2.0-beta.1`（该库公开发布的最高版本；**不存在 3.2.0 正式版**；仅发布在已关闭的 JCenter 上，库内置阿里云镜像仓库解析）
 - `com.itextpdf:itext7-core:7.2.5`（AGPL，README 声明商用注意）
 - `com.google.code.gson:gson:2.10.1`
 - `compileOnly com.facebook.react:react-native:+`（由宿主提供）
@@ -168,7 +168,7 @@ UIManager.dispatchViewManagerCommand(handle, 'setPage', [pageIndex]); // 0 基
 
 | 风险 | 缓解 |
 |---|---|
-| android-pdf-viewer 3.2.0 API 差异 | 构建期验证；如有差异按 3.2.0 API 调整（不改变对外行为） |
+| android-pdf-viewer 版本不存在（3.2.0 正式版不存在，最高为 3.2.0-beta.1，仅 JCenter 镜像可解析） | 已修正为 3.2.0-beta.1 + 内置阿里云镜像；API 与原工程使用的版本完全一致 |
 | 新架构 bridgeless 事件不通 | RCTModernEventEmitter 优先（业界标准做法） |
 | iText7 AGPL 许可 | README 声明；商用需评估 |
 | 原 `Constants.Cache` 全局静态影响宿主其他 PDF 组件 | 行为与原版一致，不改 |
