@@ -1,6 +1,6 @@
 buildscript {
     ext.safeExtGet = { prop, fallback ->
-        rootProject.ext.has(prop) ? rootProject.ext.get(prop) : fallback
+        rootProject.findProperty(prop) ?: fallback
     }
 
     repositories {
@@ -50,7 +50,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'com.facebook.react:react-android:+'
+    implementation "com.facebook.react:react-android:${safeExtGet('reactNativeVersion', '+')}"
     implementation 'com.github.barteksc:android-pdf-viewer:3.2.0-beta.1'
     implementation 'com.itextpdf:itext7-core:7.2.5'
     implementation 'com.google.code.gson:gson:2.10.1'

@@ -734,11 +734,14 @@ class PdfAnnotationView @JvmOverloads constructor(
                         val first = pts[0]
                         val startX = first.x * pageWidthPt
                         val startY = pageHeightPt * (1f - first.y)
-                        pdfCanvas.moveTo(startX, startY)
+                        pdfCanvas.moveTo(startX.toDouble(), startY.toDouble())
 
                         if (pts.size == 2) {
                             val p1 = pts[1]
-                            pdfCanvas.lineTo(p1.x * pageWidthPt, pageHeightPt * (1f - p1.y))
+                            pdfCanvas.lineTo(
+                                (p1.x * pageWidthPt).toDouble(),
+                                (pageHeightPt * (1f - p1.y)).toDouble()
+                            )
                         } else {
                             for (i in 1 until pts.size - 1) {
                                 val p0 = pts[i - 1]
@@ -750,10 +753,17 @@ class PdfAnnotationView @JvmOverloads constructor(
                                 val cp2x = (p1.x + p2.x) / 2f * pageWidthPt
                                 val cp2y = pageHeightPt * (1f - (p1.y + p2.y) / 2f)
 
-                                pdfCanvas.curveTo(cp1x, cp1y, cp2x, cp2y, cp2x, cp2y)
+                                pdfCanvas.curveTo(
+                                    cp1x.toDouble(), cp1y.toDouble(),
+                                    cp2x.toDouble(), cp2y.toDouble(),
+                                    cp2x.toDouble(), cp2y.toDouble()
+                                )
                             }
                             val last = pts[pts.size - 1]
-                            pdfCanvas.lineTo(last.x * pageWidthPt, pageHeightPt * (1f - last.y))
+                            pdfCanvas.lineTo(
+                                (last.x * pageWidthPt).toDouble(),
+                                (pageHeightPt * (1f - last.y)).toDouble()
+                            )
                         }
 
                         pdfCanvas.stroke()
