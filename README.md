@@ -46,8 +46,9 @@ import com.reactnativepdfannotation.PdfAnnotationLifecycle;
 }
 ```
 
-3. gradle 可选覆盖（root build.gradle ext）：`kotlinVersion`（默认 1.8.22）、
-   `compileSdkVersion`（默认 34）、`minSdkVersion`（默认 23）、`targetSdkVersion`（默认 34）。
+3. gradle 可选覆盖（root build.gradle ext 或 gradle.properties）：`kotlinVersion`（默认 1.8.22）、
+   `compileSdkVersion`（默认 34）、`minSdkVersion`（默认 23）、`targetSdkVersion`（默认 34）、
+   `reactNativeVersion`（react-android 版本，默认 `+`，宿主构建中由 RN 插件自动锁定为宿主版本，通常无需设置）。
 
 ## 使用
 
