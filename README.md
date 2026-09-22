@@ -10,7 +10,7 @@ Kotlin 版 PDF 手写批注原生组件（Android）。基于 AndroidPdfViewer 3
 
 ## 安装
 
-要求：RN ≥ 0.72（AGP ≥ 7.3，Kotlin 1.8+）。本包面向新工程使用，无需改动任何旧 Java 代码。
+要求：RN ≥ 0.72（AGP ≥ 7.3，JDK 17+，Kotlin 1.8+）。本包面向新工程使用，无需改动任何旧 Java 代码。
 
 ```bash
 npm install react-native-pdf-annotation
@@ -49,6 +49,7 @@ import com.reactnativepdfannotation.PdfAnnotationLifecycle;
 
 3. gradle 可选覆盖（root build.gradle ext 或 gradle.properties）：`kotlinVersion`（默认 1.8.22）、
    `compileSdkVersion`（默认 34）、`minSdkVersion`（默认 23）、`targetSdkVersion`（默认 34）、
+   `javaTargetVersion`（Java/Kotlin 目标版本，默认 17，需与宿主持平）、
    `reactNativeVersion`（react-android 版本，默认 `+`，宿主构建中由 RN 插件自动锁定为宿主版本，通常无需设置）。
 
 ## 使用
