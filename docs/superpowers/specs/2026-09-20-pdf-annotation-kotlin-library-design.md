@@ -100,7 +100,9 @@ react-native-pdf-annotation/
 
 ### 4.5 依赖与 gradle 配置
 
-- `com.github.barteksc:android-pdf-viewer:3.2.0-beta.1`（该库公开发布的最高版本；**不存在 3.2.0 正式版**；仅发布在已关闭的 JCenter 上，库内置阿里云镜像仓库解析）
+- `com.github.barteksc:android-pdf-viewer:3.2.0-beta.1` + `pdfium-android:1.9.0`（该库公开最高版本即
+  3.2.0-beta.1，仅发布于已关闭的 JCenter；**已 vendor 进包**：jetify 为 androidx 引用后拆成
+  classes.jar + jniLibs 内置，宿主无需任何额外仓库/jetifier）
 - `com.itextpdf:itext7-core:7.2.5`（AGPL，README 声明商用注意）
 - `com.google.code.gson:gson:2.10.1`
 - `compileOnly com.facebook.react:react-native:+`（由宿主提供）

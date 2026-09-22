@@ -3,9 +3,10 @@
 Kotlin 版 PDF 手写批注原生组件（Android）。基于 AndroidPdfViewer 3.2.0-beta.1（pdfium）+ iText7，
 支持 RN 0.72+（旧架构/新架构 interop 兼容）。
 
-> 依赖说明：android-pdf-viewer 公开发布的最高版本为 `3.2.0-beta.1`（不存在 3.2.0 正式版），
-> 且仅发布在已关闭的 JCenter 上。本库已内置阿里云镜像仓库
-> （`https://maven.aliyun.com/repository/public/`）用于解析，无需宿主额外配置。
+> 依赖说明：android-pdf-viewer 公开发布的最高版本为 `3.2.0-beta.1`，且只发布在已关闭的
+> JCenter 上。本库已将 android-pdf-viewer 与 pdfium-android 的产物（已 jetify 为 androidx
+> 引用、仅含 4 个主流 ABI 的原生库）直接内置进包，**宿主无需配置任何额外 Maven 仓库**，
+> 也无需启用 jetifier。
 
 ## 安装
 
