@@ -54,8 +54,8 @@ class PdfAnnotationViewManager : SimpleViewManager<PdfAnnotationView>() {
     }
 
     @ReactProp(name = "annotationMode", defaultBoolean = false)
-    fun setAnnotationMode(view: PdfAnnotationView, annotationMode: Boolean?) {
-        view.setAnnotationMode(annotationMode ?: false)
+    fun setAnnotationMode(view: PdfAnnotationView, annotationMode: Boolean) {
+        view.setAnnotationMode(annotationMode)
     }
 
     @ReactProp(name = "strokeColor")
@@ -64,23 +64,23 @@ class PdfAnnotationViewManager : SimpleViewManager<PdfAnnotationView>() {
     }
 
     @ReactProp(name = "strokeWidth", defaultFloat = 5f)
-    fun setStrokeWidth(view: PdfAnnotationView, width: Float?) {
-        view.setStrokeWidth(width ?: 5f)
+    fun setStrokeWidth(view: PdfAnnotationView, width: Float) {
+        view.setStrokeWidth(width)
     }
 
     @ReactProp(name = "minScale", defaultFloat = 1.0f)
-    fun setMinScale(view: PdfAnnotationView, scale: Float?) {
-        view.setMinScale(scale ?: 1.0f)
+    fun setMinScale(view: PdfAnnotationView, scale: Float) {
+        view.setMinScale(scale)
     }
 
     @ReactProp(name = "maxScale", defaultFloat = 5.0f)
-    fun setMaxScale(view: PdfAnnotationView, scale: Float?) {
-        view.setMaxScale(scale ?: 5.0f)
+    fun setMaxScale(view: PdfAnnotationView, scale: Float) {
+        view.setMaxScale(scale)
     }
 
     @ReactProp(name = "scale", defaultFloat = 1.0f)
-    fun setScale(view: PdfAnnotationView, scale: Float?) {
-        view.setInitialScale(scale ?: 1.0f)
+    fun setScale(view: PdfAnnotationView, scale: Float) {
+        view.setInitialScale(scale)
     }
 
     override fun getExportedCustomDirectEventTypeConstants(): MutableMap<String, Any>? =
