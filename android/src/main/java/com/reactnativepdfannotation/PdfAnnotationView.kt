@@ -19,6 +19,8 @@ import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.WritableArray
 import com.facebook.react.bridge.WritableMap
 import com.facebook.react.uimanager.ThemedReactContext
+import com.facebook.react.uimanager.UIManagerHelper
+import com.facebook.react.uimanager.events.Event
 import com.facebook.react.uimanager.events.RCTEventEmitter
 import com.facebook.react.uimanager.events.RCTModernEventEmitter
 import com.github.barteksc.pdfviewer.PDFView
@@ -808,11 +810,17 @@ class PdfAnnotationView @JvmOverloads constructor(
                 return@post
             }
             try {
-                val modernEmitter = ctx.getJSModule(RCTModernEventEmitter::class.java)
-                if (modernEmitter != null) {
-                    modernEmitter.receiveEvent(viewId, eventName, event)
+                val catalyst = ctx.catalystInstance
+                if (catalyst != null) {
+                    val modernEmitter = ctx.getJSModule(RCTModernEventEmitter::class.java)
+                    if (modernEmitter != null) {
+                        modernEmitter.receiveEvent(viewId, eventName, event)
+                    } else {
+                        ctx.getJSModule(RCTEventEmitter::class.java).receiveEvent(viewId, eventName, event)
+                    }
                 } else {
-                    ctx.getJSModule(RCTEventEmitter::class.java).receiveEvent(viewId, eventName, event)
+                    UIManagerHelper.getEventDispatcherForReactTag(ctx, viewId)
+                        ?.dispatchEvent(AnnotationEvent(viewId, eventName, event))
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to send event: $eventName", e)
@@ -1053,6 +1061,17 @@ class PdfAnnotationView @JvmOverloads constructor(
         val backup = File(file.parent, file.name + ".corrupt")
         backup.delete()
         file.renameTo(backup)
+    }
+
+    private class AnnotationEvent(
+        viewTag: Int,
+        private val eventName: String,
+        private val eventData: WritableMap
+    ) : Event<AnnotationEvent>(viewTag) {
+
+        override fun getEventName(): String = eventName
+
+        override fun getEventData(): WritableMap = eventData
     }
 
     class AnnotationStroke(
