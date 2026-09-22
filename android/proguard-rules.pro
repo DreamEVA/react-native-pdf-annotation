@@ -1,3 +1,4 @@
 -keep class com.reactnativepdfannotation.** { *; }
+-keep class com.github.barteksc.** { *; }
 -keep class com.shockwave.** { *; }
 -keep class com.itextpdf.** { *; }

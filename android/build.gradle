@@ -6,7 +6,6 @@ buildscript {
     repositories {
         google()
         mavenCentral()
-        maven { url 'https://www.jitpack.io' }
     }
 
     dependencies {
@@ -41,17 +40,11 @@ android {
 repositories {
     google()
     mavenCentral()
-    maven { url 'https://www.jitpack.io' }
-    maven { url 'https://maven.aliyun.com/repository/public/' }
-    def reactNativeAndroidDir = "$rootDir/../node_modules/react-native/android"
-    if (file(reactNativeAndroidDir).exists()) {
-        maven { url reactNativeAndroidDir }
-    }
 }
 
 dependencies {
     implementation "com.facebook.react:react-android:${safeExtGet('reactNativeVersion', '+')}"
-    implementation 'com.github.barteksc:android-pdf-viewer:3.2.0-beta.1'
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
     implementation 'com.itextpdf:itext7-core:7.2.5'
     implementation 'com.google.code.gson:gson:2.10.1'
 }
