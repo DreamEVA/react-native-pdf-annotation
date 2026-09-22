@@ -25,6 +25,12 @@
     "src",
     "android",
     "!android/build",
-    "!android/.gradle"
+    "!android/.gradle",
+    "!android/.idea",
+    "!android/gradle",
+    "!android/gradlew",
+    "!android/gradlew.bat",
+    "!android/settings.gradle",
+    "!android/gradle.properties"
   ]
 }
