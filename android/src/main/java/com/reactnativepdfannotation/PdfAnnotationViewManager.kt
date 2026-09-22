@@ -14,14 +14,14 @@ class PdfAnnotationViewManager : SimpleViewManager<PdfAnnotationView>() {
         PdfAnnotationView(reactContext)
 
     override fun getCommandsMap(): MutableMap<String, Int>? =
-        MapBuilder.builder<String, Int>()
-            .put("undo", COMMAND_UNDO)
-            .put("redo", COMMAND_REDO)
-            .put("clear", COMMAND_CLEAR)
-            .put("export", COMMAND_EXPORT)
-            .put("exportPdf", COMMAND_EXPORT_PDF)
-            .put("setPage", COMMAND_SET_PAGE)
-            .build()
+        mutableMapOf(
+            "undo" to COMMAND_UNDO,
+            "redo" to COMMAND_REDO,
+            "clear" to COMMAND_CLEAR,
+            "export" to COMMAND_EXPORT,
+            "exportPdf" to COMMAND_EXPORT_PDF,
+            "setPage" to COMMAND_SET_PAGE
+        )
 
     override fun receiveCommand(view: PdfAnnotationView, commandId: String, args: ReadableArray?) {
         when (commandId) {
@@ -29,14 +29,10 @@ class PdfAnnotationViewManager : SimpleViewManager<PdfAnnotationView>() {
             "redo", "2" -> view.redo()
             "clear", "3" -> view.clearAll()
             "export", "4" -> {
-                if (args != null && args.size() > 0) {
-                    view.exportAnnotations(args.getString(0))
-                }
+                args?.getString(0)?.let { view.exportAnnotations(it) }
             }
             "exportPdf", "5" -> {
-                if (args != null && args.size() > 0) {
-                    view.exportPdf(args.getString(0))
-                }
+                args?.getString(0)?.let { view.exportPdf(it) }
             }
             "setPage", "6" -> {
                 if (args != null && args.size() > 0) {
@@ -88,15 +84,15 @@ class PdfAnnotationViewManager : SimpleViewManager<PdfAnnotationView>() {
     }
 
     override fun getExportedCustomDirectEventTypeConstants(): MutableMap<String, Any>? =
-        MapBuilder.builder<String, Any>()
-            .put("onExportResult", MapBuilder.of("registrationName", "onExportResult"))
-            .put("onExportPdfResult", MapBuilder.of("registrationName", "onExportPdfResult"))
-            .put("onLoadComplete", MapBuilder.of("registrationName", "onLoadComplete"))
-            .put("onTableOfContents", MapBuilder.of("registrationName", "onTableOfContents"))
-            .put("onPageChanged", MapBuilder.of("registrationName", "onPageChanged"))
-            .put("onError", MapBuilder.of("registrationName", "onError"))
-            .put("onAnnotationChanged", MapBuilder.of("registrationName", "onAnnotationChanged"))
-            .build()
+        mutableMapOf(
+            "onExportResult" to MapBuilder.of("registrationName", "onExportResult"),
+            "onExportPdfResult" to MapBuilder.of("registrationName", "onExportPdfResult"),
+            "onLoadComplete" to MapBuilder.of("registrationName", "onLoadComplete"),
+            "onTableOfContents" to MapBuilder.of("registrationName", "onTableOfContents"),
+            "onPageChanged" to MapBuilder.of("registrationName", "onPageChanged"),
+            "onError" to MapBuilder.of("registrationName", "onError"),
+            "onAnnotationChanged" to MapBuilder.of("registrationName", "onAnnotationChanged")
+        )
 
     companion object {
         const val REACT_CLASS = "PdfAnnotationView"
