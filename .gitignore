@@ -1,4 +1,5 @@
 node_modules/
+docs/
 *.tgz
 npm-debug.log*
 android/build/
