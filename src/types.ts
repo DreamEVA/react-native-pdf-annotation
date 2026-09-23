@@ -37,19 +37,13 @@ export interface PdfAnnotationExportResultEvent {
   message: string;
 }
 
-export interface PdfAnnotationExportPdfResultEvent {
-  success: boolean;
-  message: string;
-  filePath?: string;
+export interface PdfAnnotationViewRef {
+  undo: () => void;
+  redo: () => void;
+  clear: () => void;
+  exportAnnotations: (exportDir: string) => void;
+  setPage: (pageIndex: number) => void;
 }
-
-export type PdfAnnotationCommand =
-  | 'undo'
-  | 'redo'
-  | 'clear'
-  | 'export'
-  | 'exportPdf'
-  | 'setPage';
 
 export interface PdfAnnotationViewProps extends ViewProps {
   filePath?: string;
@@ -66,5 +60,4 @@ export interface PdfAnnotationViewProps extends ViewProps {
   onError?: (event: NativeSyntheticEvent<PdfAnnotationErrorEvent>) => void;
   onAnnotationChanged?: (event: NativeSyntheticEvent<PdfAnnotationChangedEvent>) => void;
   onExportResult?: (event: NativeSyntheticEvent<PdfAnnotationExportResultEvent>) => void;
-  onExportPdfResult?: (event: NativeSyntheticEvent<PdfAnnotationExportPdfResultEvent>) => void;
 }

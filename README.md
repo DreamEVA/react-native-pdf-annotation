@@ -1,24 +1,28 @@
 # react-native-pdf-annotation
 
-Android 端 PDF 手写批注原生组件（Kotlin 实现），用于在 PDF 上自由书写标注、撤销/重做、自动保存，并支持把批注导出为 JSON 或烘焙进 PDF 文件。
+Android 端 PDF 手写批注原生组件（Kotlin 实现），用于在 PDF 上自由书写标注、撤销/重做、自动保存，并把批注导出为 JSON。
 
 - 渲染引擎：AndroidPdfViewer 3.2.0-beta.1（pdfium，与 react-native-pdf 同源）
-- 导出引擎：iText7
 - 支持 React Native 0.72+，旧架构与新架构（含 bridgeless）双兼容
 
 ## 特性
 
-- 在 PDF 任意页面手写批注，坐标按页面归一化存储，缩放/换屏后批注始终与内容对齐
-- 单指绘制、多指缩放/滚动、双击三档缩放
+- 在 PDF 任意页面手写批注，坐标按页面归一化存储；缩放或换屏后笔迹位置仍与内容对齐。线宽按绘制时的屏幕像素保存，换屏后粗细不会按新屏幕重算
+- 单指绘制、多指缩放/滚动。双击在三档之间循环：中档 `(minScale + maxScale) / 2` → `maxScale` → 初始 `scale`
 - 全局跨页撤销 / 重做（上限 100 笔）
 - 批注自动保存（300ms 防抖 + 原子写入），重新打开自动恢复
-- 导出批注 JSON，或通过 iText7 将批注永久烘焙进 PDF
+- 导出批注 JSON
 - 目录（table of contents）回调、页码回调、加载状态回调
 - App 后台 / 内存压力时自动释放 pdfium 原生资源，防止崩溃
 
 > 依赖说明：android-pdf-viewer 公开发布的最高版本为 `3.2.0-beta.1`，且仅发布在已关闭的
-> JCenter 上。本库已将其与 pdfium-android 的产物（已 jetify 为 androidx 引用、仅保留 4 个
-> 主流 ABI）直接内置进包，**宿主无需配置任何额外 Maven 仓库，也无需启用 jetifier**。
+> JCenter 上。本库已将其与 pdfium-android 的 jar，以及 4 个主流 ABI
+> （`arm64-v8a`、`armeabi-v7a`、`x86`、`x86_64`）的原生库直接内置进包。这些产物不引用
+> 旧版 `android.support`，**宿主无需配置任何额外 Maven 仓库，也无需启用 jetifier**。
+> 包内不含 `libc++_shared.so`。React Native 0.72 起宿主已经带了这份 C++ 运行库，pdfium 运行时用宿主的那一份。
+>
+> 内置的 pdfium 为 2018 年的 `pdfium-android` 1.9.0，不包含此后的上游安全修复。
+> 本库仅打开设备上的本地 PDF，不发起网络请求。
 
 ## 环境要求
 
@@ -27,7 +31,7 @@ Android 端 PDF 手写批注原生组件（Kotlin 实现），用于在 PDF 上�
 | React Native | ≥ 0.72（新架构/旧架构均可） |
 | JDK | 17+（RN 0.72/0.73 老工程若仍用 JDK 11，需升级或设置 `javaTargetVersion=11`） |
 | AGP | ≥ 7.3 |
-| Kotlin | 1.8+（随宿主自动使用其 Kotlin 版本） |
+| Kotlin | 默认 1.8.22。不会自动跟随宿主的 Kotlin 版本，需要一致时设置 `kotlinVersion`（见下文） |
 
 ## 安装
 
@@ -38,6 +42,19 @@ npm install ./react-native-pdf-annotation-1.0.0.tgz
 ```
 
 autolinking 会自动注册原生模块，无需手动配置 gradle。
+
+## 示例
+
+演示工程只在 Git 仓库的 `example/` 里，npm 包不包含这个目录。`MainActivity` 已接入生命周期回调。
+
+```bash
+git clone https://github.com/DreamEVA/react-native-pdf-annotation.git
+cd react-native-pdf-annotation/example
+npm install
+npm run android
+```
+
+修改库的 TypeScript 后，在仓库根目录执行 `npm run build`。示例通过构建产物 `lib/` 引用该库。
 
 ### 必须配置：Activity 生命周期分发
 
@@ -83,8 +100,7 @@ import com.reactnativepdfannotation.PdfAnnotationLifecycle;
 @Override public void onTrimMemory(int level) { super.onTrimMemory(level); PdfAnnotationLifecycle.onTrimMemory(this, level); }
 ```
 
-> 若宿主工程内曾内嵌过同名旧组件（原生视图名 `PdfAnnotationView`），请先删除旧源码，
-> 避免 REACT_CLASS 冲突（全新工程无需此步）。
+> 宿主工程中若仍保留原生视图名同为 `PdfAnnotationView` 的旧实现，需先删除，否则 `REACT_CLASS` 冲突。
 
 ### 可选：gradle 属性覆盖
 
@@ -97,24 +113,16 @@ import com.reactnativepdfannotation.PdfAnnotationLifecycle;
 | `minSdkVersion` | 23 | 最低 SDK |
 | `targetSdkVersion` | 34 | 目标 SDK |
 | `javaTargetVersion` | 17 | Java/Kotlin 目标版本，需与宿主一致 |
-| `reactNativeVersion` | `+` | react-android 版本；宿主构建中由 RN 插件自动锁定，通常无需设置 |
+| `reactNativeVersion` | `+` | react-android 版本。宿主构建时由 React Native Gradle 插件锁定 |
 
 ## 快速开始
 
 ```tsx
-import React, { useRef, useCallback } from 'react';
-import { UIManager, findNodeHandle } from 'react-native';
-import PdfAnnotationView from 'react-native-pdf-annotation';
+import React, { useRef } from 'react';
+import PdfAnnotationView, { type PdfAnnotationViewRef } from 'react-native-pdf-annotation';
 
 export default function PdfEditor() {
-  const pdfRef = useRef(null);
-
-  const dispatch = useCallback((command: string, args: unknown[] = []) => {
-    const node = findNodeHandle(pdfRef.current);
-    if (node != null) {
-      UIManager.dispatchViewManagerCommand(node, command, args);
-    }
-  }, []);
+  const pdfRef = useRef<PdfAnnotationViewRef>(null);
 
   return (
     <PdfAnnotationView
@@ -161,26 +169,20 @@ export default function PdfEditor() {
 
 ## 命令
 
-通过 `UIManager.dispatchViewManagerCommand(node, command, args)` 调用：
+通过组件 ref 调用。命令经 React Native `dispatchCommand` 派发，适用于旧架构与新架构。
 
-| 命令 | 参数 | 说明 |
+| 方法 | 参数 | 说明 |
 |---|---|---|
-| `undo` | - | 撤销最近一笔（全局跨页） |
-| `redo` | - | 重做 |
-| `clear` | - | 清空全部批注，并删除磁盘上的批注文件 |
-| `export` | `[exportDir]` | 导出批注 JSON 到目录（文件名为 `{pdf文件名}.ann.json`），结果回调 `onExportResult` |
-| `exportPdf` | `[exportPath]` | 把批注永久烘焙进 PDF 并输出到指定路径，结果回调 `onExportPdfResult` |
-| `setPage` | `[pageIndex]` | 跳转到指定页（0 基索引） |
+| `undo()` | - | 撤销最近一笔（全局跨页） |
+| `redo()` | - | 重做 |
+| `clear()` | - | 清空全部批注，并删除磁盘上的批注文件 |
+| `exportAnnotations(exportDir)` | 导出目录 | 导出批注 JSON。文件名取**正在加载的 PDF**（`filePath`）的文件名，加 `.ann.json`。`width` 为相对视图宽度的比例，与 `onAnnotationChanged` 相同，不是磁盘 `.ann.json` 的像素格式。成功时 `onExportResult` 的 `message` 为导出文件绝对路径 |
+| `setPage(pageIndex)` | 0 基页码 | 跳转到指定页 |
 
 ```ts
-// 撤销
-UIManager.dispatchViewManagerCommand(handle, 'undo', []);
-// 跳转到第 3 页
-UIManager.dispatchViewManagerCommand(handle, 'setPage', [2]);
-// 导出批注 JSON
-UIManager.dispatchViewManagerCommand(handle, 'export', ['/sdcard/Documents/annotations']);
-// 烘焙导出 PDF
-UIManager.dispatchViewManagerCommand(handle, 'exportPdf', ['/sdcard/Documents/out.pdf']);
+pdfRef.current?.undo();
+pdfRef.current?.setPage(2); // 第 3 页
+pdfRef.current?.exportAnnotations('/sdcard/Documents/annotations');
 ```
 
 ## 事件
@@ -194,14 +196,11 @@ UIManager.dispatchViewManagerCommand(handle, 'exportPdf', ['/sdcard/Documents/ou
 | `onTableOfContents` | `filePath, tableOfContents` | 目录回调，`tableOfContents` 为 `[{title, page, pageNumber, children}]` 树 |
 | `onError` | `message` | 加载/渲染错误 |
 | `onAnnotationChanged` | `data` | 批注变化时回调，`data` 为归一化 JSON 字符串 |
-| `onExportResult` | `success, message` | `export` 命令结果 |
-| `onExportPdfResult` | `success, message, filePath?` | `exportPdf` 命令结果 |
+| `onExportResult` | `success, message` | `exportAnnotations` 的结果。成功时 `message` 为导出文件绝对路径，失败时为错误信息 |
 
-> TypeScript 类型均已导出：`import PdfAnnotationView, { PdfAnnotationViewProps } from 'react-native-pdf-annotation'`。
+> TypeScript 类型均已导出：`import PdfAnnotationView, { type PdfAnnotationViewProps, type PdfAnnotationViewRef } from 'react-native-pdf-annotation'`。
 
-## 批注数据如何存储
-
-这是使用本组件最需要理解的部分。
+## 批注存储
 
 ### 存储规则
 
@@ -221,8 +220,7 @@ filePath="file:///data/user/0/com.example/files/foo.pdf"
 // 批注文件 → /data/user/0/com.example/files/foo.pdf.ann.json
 ```
 
-批注文件就写在 PDF 旁边。**注意**：如果 `filePath` 指向应用私有目录，批注会随 App
-卸载一起被删除。
+批注文件与 PDF 位于同一目录。`filePath` 指向应用私有目录时，批注随应用卸载删除。
 
 ### 同时传 originalPath（推荐）
 
@@ -232,16 +230,16 @@ originalPath="file:///storage/emulated/0/Documents/foo.pdf"  // 公共目录中�
 // 批注文件 → /storage/emulated/0/Documents/foo.pdf.ann.json
 ```
 
-即使 PDF 本体被复制到私有目录，批注也固定写在 `originalPath` 旁，好处：
+PDF 被复制到私有目录时，批注仍写在 `originalPath` 旁：
 
-- **卸载 App 不丢失**（批注在公共目录）
-- 删除原始 PDF 时，批注文件随同名文件一起清理
-- 重新打开同一 PDF 时自动从 `.ann.json` 恢复批注与撤销栈
+- `originalPath` 位于公共目录时，卸载应用不会删除批注
+- 批注文件与原始 PDF 同目录，文件名为 PDF 文件名加 `.ann.json`。删除 PDF 时不会自动删除该文件
+- 再次打开同一 `originalPath` 时，从 `.ann.json` 恢复批注与撤销栈。重做栈不恢复
 
 ### 写入可靠性与格式
 
-- **原子写入**：先写临时文件再 `rename`，崩溃不会损坏既有批注
-- **异常自愈**：JSON 损坏时自动备份为 `.corrupt` 并从空白开始，不影响加载
+- **原子写入**：先写临时文件再 `rename`。`rename` 失败时改为直接写入目标文件
+- **损坏的 JSON**：解析失败时当作没有批注，从空白开始，原文件保留且不会改名为 `.corrupt`。之后一旦有新笔迹并触发自动保存，会覆盖这个坏文件。只有读取文件本身抛出异常时，才会把原文件备份为 `.corrupt` 再从空白开始
 - **格式版本** `version=3`，结构如下：
 
 ```json
@@ -265,15 +263,13 @@ originalPath="file:///storage/emulated/0/Documents/foo.pdf"  // 公共目录中�
 }
 ```
 
-- `points` 为 **0~1 归一化页面坐标**，因此批注在任何屏幕尺寸/缩放下都与 PDF 内容对齐
-- `width` 为屏幕像素（version 3；旧版本文件会自动兼容转换）
+- `points` 为 **0~1 归一化页面坐标**，所以笔迹位置在任何屏幕尺寸和缩放下都与 PDF 内容对齐。线宽不参与这套归一化（见下条）
+- `width` 在 version 3 中为屏幕像素。读取时只有 version 2 会把 `width` 乘以当前视图宽度换回像素；version 1 按文件中的原值当作像素使用
 - `clear` 命令会删除磁盘上的批注文件
 
 ### onAnnotationChanged 的 data 与磁盘文件区别
 
-`onAnnotationChanged` 回调中的 `data` 是**归一化 JSON**（`width` 为相对视图宽度的比例），
-供 JS 侧展示/上传；磁盘上的 `.ann.json` 则是 `width` 为屏幕像素的持久化格式。两者都
-由同一份批注数据派生，字段结构一致。
+`onAnnotationChanged` 的 `data` 与 `exportAnnotations` 写出的 JSON 使用归一化线宽（相对视图宽度的比例）。磁盘 `.ann.json` 中的 `width` 为屏幕像素。两者字段结构相同，仅 `width` 的单位不同。
 
 ## 存储权限
 
@@ -286,7 +282,7 @@ originalPath="file:///storage/emulated/0/Documents/foo.pdf"  // 公共目录中�
 | 公共目录（如 `/storage/emulated/0/Documents/`，Android 10 及以下） | `WRITE_EXTERNAL_STORAGE`（运行时申请） |
 | 公共目录（Android 11+ / API 30+） | `MANAGE_EXTERNAL_STORAGE`（"所有文件访问"，特殊设置页授权） |
 
-如果你把 `originalPath` 指向公共目录，必须在宿主工程完成以下两步。
+`originalPath` 指向公共目录时，宿主工程需要完成以下配置。
 
 ### 1. AndroidManifest.xml 声明
 
@@ -358,30 +354,19 @@ override fun onRequestPermissionsResult(
 }
 ```
 
-### 建议与注意事项
+### 注意事项
 
-- **上架 Google Play**：`MANAGE_EXTERNAL_STORAGE` 属于受限权限，需要声明具体用途并经
-  官方审核，可能被拒。若仅需暂存批注，推荐改用**应用专属外部目录**
-  （`context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS)`），完全免权限，但
-  数据随卸载删除；如需"卸载不丢"，再考虑公共目录 + `MANAGE_EXTERNAL_STORAGE`。
-- **鸿蒙/国产 ROM**：部分机型对"所有文件访问"入口有差异（如"文件管理权限"），需在
-  系统设置中手动开启；组件无法代替用户完成。
-- 权限申请时机建议在**打开 PDF 前**完成（如点击打开文档时先 `ensureStoragePermission`，
-  授权后再渲染组件），避免组件因无权限读不到文件或写不了批注。
-
-## 许可证说明
-
-本组件依赖 iText7（AGPL 许可）。若以开源形式发布，AGPL 兼容；**商用闭源发布前请评估
-iText7 许可证合规**（必要时购买商业许可或替换导出实现）。
+- `MANAGE_EXTERNAL_STORAGE` 在 Google Play 上属于受限权限，需声明用途并通过审核。仅需随应用保存批注时，使用应用专属外部目录 `context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS)`，无需该权限，数据随卸载删除。
+- 部分系统对「所有文件访问」的入口名称不同，需在系统设置中授权。
+- 在加载 PDF 之前完成授权，避免组件因无权限无法读写文件。
 
 ## 常见问题
 
 **Q：不配置 PdfAnnotationLifecycle 会怎样？**
-A：后台/内存压力时 pdfium 原生资源可能被系统回收，组件再绘制会访问已释放内存导致
-原生崩溃（SIGSEGV）。请务必接入（见上文 4 行代码）。
+A：应用进入后台或系统回收内存后，pdfium 原生资源可能已释放，再次绘制会触发原生崩溃（SIGSEGV）。需接入上文 `MainActivity` 的 4 个生命周期回调。
 
 **Q：RN 0.72/0.73 工程构建报 `invalid target release 17`？**
 A：构建 JDK 低于 17 所致。升级 JDK 17，或在宿主 gradle 设置 `ext.javaTargetVersion = "11"`。
 
 **Q：批注在换设备/换屏幕后位置还对吗？**
-A：对。批注以页面归一化坐标存储，与设备分辨率无关。
+A：位置对。笔迹坐标是页面归一化值，与分辨率无关。线宽保存的是绘制时的屏幕像素，换到更宽或更窄的屏幕后，相对页面的粗细会变。

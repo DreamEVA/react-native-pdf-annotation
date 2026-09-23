@@ -1,10 +1,14 @@
 {
   "name": "react-native-pdf-annotation",
   "version": "1.0.0",
-  "description": "PDF handwriting annotation native view for React Native (Android, Kotlin). Port of the meeting_pad Java component.",
+  "description": "Android PDF handwriting annotation view for React Native.",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DreamEVA/react-native-pdf-annotation.git"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",

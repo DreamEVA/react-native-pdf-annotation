@@ -7,7 +7,7 @@ import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import com.google.gson.annotations.SerializedName
 
-internal object AnnotationPersistence {
+object AnnotationPersistence {
 
     private const val TAG = "AnnotationPersistence"
     const val CURRENT_VERSION = 3
@@ -27,7 +27,7 @@ internal object AnnotationPersistence {
 
         constructor()
 
-        constructor(s: PdfAnnotationView.AnnotationStroke, viewWidthPx: Float, normalize: Boolean) {
+        constructor(s: AnnotationStroke, viewWidthPx: Float, normalize: Boolean) {
             this.color = String.format("#%08X", s.color)
             this.width = if (normalize && viewWidthPx > 0) s.width / viewWidthPx else s.width
             this.timestamp = s.timestamp
@@ -36,7 +36,7 @@ internal object AnnotationPersistence {
             }
         }
 
-        fun toStroke(pageIndex: Int, viewWidthPx: Float): PdfAnnotationView.AnnotationStroke {
+        fun toStroke(pageIndex: Int, viewWidthPx: Float): AnnotationStroke {
             val c = try {
                 Color.parseColor(color)
             } catch (e: Exception) {
@@ -44,7 +44,7 @@ internal object AnnotationPersistence {
                 Color.RED
             }
             val px = if (viewWidthPx > 0) width * viewWidthPx else width
-            val stroke = PdfAnnotationView.AnnotationStroke(pageIndex, c, px)
+            val stroke = AnnotationStroke(pageIndex, c, px)
             stroke.timestamp = timestamp
             for (pd in points) {
                 stroke.normalizedPoints.add(pd.toPointF())
@@ -84,19 +84,19 @@ internal object AnnotationPersistence {
 
     fun toJson(
         pdfPath: String,
-        pageAnnotations: Map<Int, MutableList<PdfAnnotationView.AnnotationStroke>>,
+        pageAnnotations: Map<Int, MutableList<AnnotationStroke>>,
         viewWidthPx: Float
     ): String = serialize(pdfPath, pageAnnotations, viewWidthPx, false)
 
     fun toJsonNormalized(
         pdfPath: String,
-        pageAnnotations: Map<Int, MutableList<PdfAnnotationView.AnnotationStroke>>,
+        pageAnnotations: Map<Int, MutableList<AnnotationStroke>>,
         viewWidthPx: Float
     ): String = serialize(pdfPath, pageAnnotations, viewWidthPx, true)
 
     private fun serialize(
         pdfPath: String,
-        pageAnnotations: Map<Int, MutableList<PdfAnnotationView.AnnotationStroke>>,
+        pageAnnotations: Map<Int, MutableList<AnnotationStroke>>,
         viewWidthPx: Float,
         normalize: Boolean
     ): String {
@@ -117,8 +117,8 @@ internal object AnnotationPersistence {
     fun fromJson(
         json: String?,
         viewWidthPx: Float
-    ): HashMap<Int, MutableList<PdfAnnotationView.AnnotationStroke>> {
-        val result = HashMap<Int, MutableList<PdfAnnotationView.AnnotationStroke>>()
+    ): HashMap<Int, MutableList<AnnotationStroke>> {
+        val result = HashMap<Int, MutableList<AnnotationStroke>>()
         if (json.isNullOrEmpty()) return result
 
         try {
@@ -133,7 +133,7 @@ internal object AnnotationPersistence {
 
             for (page in file.pages) {
                 if (page.strokes == null || page.strokes.isEmpty()) continue
-                val strokes = ArrayList<PdfAnnotationView.AnnotationStroke>()
+                val strokes = ArrayList<AnnotationStroke>()
                 for (dto in page.strokes) {
                     if (dto.points == null || dto.points.size < 2) continue
                     strokes.add(dto.toStroke(page.pageIndex, resolveWidth))

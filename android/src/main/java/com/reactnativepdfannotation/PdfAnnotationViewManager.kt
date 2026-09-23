@@ -19,7 +19,6 @@ class PdfAnnotationViewManager : SimpleViewManager<PdfAnnotationView>() {
             "redo" to COMMAND_REDO,
             "clear" to COMMAND_CLEAR,
             "export" to COMMAND_EXPORT,
-            "exportPdf" to COMMAND_EXPORT_PDF,
             "setPage" to COMMAND_SET_PAGE
         )
 
@@ -31,10 +30,7 @@ class PdfAnnotationViewManager : SimpleViewManager<PdfAnnotationView>() {
             "export", "4" -> {
                 args?.getString(0)?.let { view.exportAnnotations(it) }
             }
-            "exportPdf", "5" -> {
-                args?.getString(0)?.let { view.exportPdf(it) }
-            }
-            "setPage", "6" -> {
+            "setPage", "5" -> {
                 if (args != null && args.size() > 0) {
                     view.setPage(args.getInt(0))
                 }
@@ -86,7 +82,6 @@ class PdfAnnotationViewManager : SimpleViewManager<PdfAnnotationView>() {
     override fun getExportedCustomDirectEventTypeConstants(): MutableMap<String, Any>? =
         mutableMapOf(
             "onExportResult" to MapBuilder.of("registrationName", "onExportResult"),
-            "onExportPdfResult" to MapBuilder.of("registrationName", "onExportPdfResult"),
             "onLoadComplete" to MapBuilder.of("registrationName", "onLoadComplete"),
             "onTableOfContents" to MapBuilder.of("registrationName", "onTableOfContents"),
             "onPageChanged" to MapBuilder.of("registrationName", "onPageChanged"),
@@ -101,7 +96,6 @@ class PdfAnnotationViewManager : SimpleViewManager<PdfAnnotationView>() {
         private const val COMMAND_REDO = 2
         private const val COMMAND_CLEAR = 3
         private const val COMMAND_EXPORT = 4
-        private const val COMMAND_EXPORT_PDF = 5
-        private const val COMMAND_SET_PAGE = 6
+        private const val COMMAND_SET_PAGE = 5
     }
 }

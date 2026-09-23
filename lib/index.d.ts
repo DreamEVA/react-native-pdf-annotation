@@ -1,2 +1,2 @@
 export { default } from './PdfAnnotationView';
-export type { PdfAnnotationViewProps, PdfAnnotationCommand, PdfAnnotationTableOfContentItem, PdfAnnotationLoadCompleteEvent, PdfAnnotationPageChangedEvent, PdfAnnotationTableOfContentsEvent, PdfAnnotationErrorEvent, PdfAnnotationChangedEvent, PdfAnnotationExportResultEvent, PdfAnnotationExportPdfResultEvent, } from './types';
+export type { PdfAnnotationViewProps, PdfAnnotationViewRef, PdfAnnotationTableOfContentItem, PdfAnnotationLoadCompleteEvent, PdfAnnotationPageChangedEvent, PdfAnnotationTableOfContentsEvent, PdfAnnotationErrorEvent, PdfAnnotationChangedEvent, PdfAnnotationExportResultEvent, } from './types';

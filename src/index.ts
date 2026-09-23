@@ -1,7 +1,7 @@
 export { default } from './PdfAnnotationView';
 export type {
   PdfAnnotationViewProps,
-  PdfAnnotationCommand,
+  PdfAnnotationViewRef,
   PdfAnnotationTableOfContentItem,
   PdfAnnotationLoadCompleteEvent,
   PdfAnnotationPageChangedEvent,
@@ -9,5 +9,4 @@ export type {
   PdfAnnotationErrorEvent,
   PdfAnnotationChangedEvent,
   PdfAnnotationExportResultEvent,
-  PdfAnnotationExportPdfResultEvent,
 } from './types';

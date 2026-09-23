@@ -21,8 +21,6 @@ import com.facebook.react.bridge.WritableMap
 import com.facebook.react.uimanager.ThemedReactContext
 import com.facebook.react.uimanager.UIManagerHelper
 import com.facebook.react.uimanager.events.Event
-import com.facebook.react.uimanager.events.RCTEventEmitter
-import com.facebook.react.uimanager.events.RCTModernEventEmitter
 import com.github.barteksc.pdfviewer.PDFView
 import com.github.barteksc.pdfviewer.listener.OnErrorListener
 import com.github.barteksc.pdfviewer.listener.OnLoadCompleteListener
@@ -31,21 +29,10 @@ import com.github.barteksc.pdfviewer.listener.OnPageScrollListener
 import com.github.barteksc.pdfviewer.listener.OnRenderListener
 import com.github.barteksc.pdfviewer.util.Constants
 import com.github.barteksc.pdfviewer.util.FitPolicy
-import com.itextpdf.kernel.colors.DeviceRgb
-import com.itextpdf.kernel.geom.Rectangle
-import com.itextpdf.kernel.pdf.PdfDocument
-import com.itextpdf.kernel.pdf.PdfReader
-import com.itextpdf.kernel.pdf.PdfWriter
-import com.itextpdf.kernel.pdf.ReaderProperties
-import com.itextpdf.kernel.pdf.canvas.PdfCanvas
-import com.itextpdf.kernel.pdf.canvas.PdfCanvasConstants
-import com.itextpdf.kernel.pdf.extgstate.PdfExtGState
 import com.shockwave.pdfium.PdfDocument.Bookmark
 import com.shockwave.pdfium.util.SizeF
 import java.io.BufferedReader
 import java.io.File
-import java.io.FileInputStream
-import java.io.FileOutputStream
 import java.io.FileReader
 import java.io.FileWriter
 import java.io.IOException
@@ -431,6 +418,9 @@ class PdfAnnotationView @JvmOverloads constructor(
     fun loadPdf(filePath: String) {
         val normalizedPath = filePath.replace("file://", "")
 
+        // 切换文档前先写入上一份尚未落盘的笔迹。存储路径在调度保存时确定。
+        flushPendingSave()
+
         currentPdfPath = normalizedPath
         Log.i(TAG, "loadPdf: path=$normalizedPath")
 
@@ -461,86 +451,49 @@ class PdfAnnotationView @JvmOverloads constructor(
         loadingView.addOnLayoutChangeListener(listener)
     }
 
-    private fun getPageOffsetY(pageIndex: Int): Float {
-        val view = pdfView ?: return 0f
-        if (!isPdfViewReady()) return 0f
-        var offset = 0f
-        var i = 0
-        while (i < pageIndex && i < totalPages) {
-            offset += view.getPageSize(i).height
-            i++
+    private fun pageSizes(): List<AnnotationGeometry.PageSize>? {
+        val view = pdfView ?: return null
+        if (!isPdfViewReady() || totalPages <= 0) return null
+        val sizes = ArrayList<AnnotationGeometry.PageSize>(totalPages)
+        for (i in 0 until totalPages) {
+            val size = view.getPageSize(i)
+            sizes.add(AnnotationGeometry.PageSize(size.width, size.height))
         }
-        return offset
+        return sizes
     }
 
     private fun screenToNormalized(screenX: Float, screenY: Float, outPageIndex: IntArray?): PointF? {
         val view = pdfView ?: return null
-        if (!isPdfViewReady()) return null
-        val zoom = view.zoom
-        if (totalPages <= 0 || zoom <= 0) return null
-
-        val offsetX = view.currentXOffset
-        val offsetY = view.currentYOffset
-
-        val docX = (screenX - offsetX) / zoom
-        val docY = (screenY - offsetY) / zoom
-
-        var targetPage = currentPage
-        var pageStartY = 0f
-
-        for (i in 0 until totalPages) {
-            val pageHeight = view.getPageSize(i).height
-            if (docY >= pageStartY && docY < pageStartY + pageHeight) {
-                targetPage = i
-                break
-            }
-            pageStartY += pageHeight
-        }
-
-        val targetSize = view.getPageSize(targetPage)
-        val pageWidth = targetSize.width
-        val pageHeight = targetSize.height
-        val targetPageStartY = getPageOffsetY(targetPage)
-
-        var normalizedX = docX / pageWidth
-        var normalizedY = (docY - targetPageStartY) / pageHeight
-
-        if (normalizedX < -0.05f || normalizedX > 1.05f ||
-            normalizedY < -0.05f || normalizedY > 1.05f) {
-            return null
-        }
-
-        normalizedX = normalizedX.coerceIn(0f, 1f)
-        normalizedY = normalizedY.coerceIn(0f, 1f)
+        val sizes = pageSizes() ?: return null
+        val hit = AnnotationGeometry.screenToNormalized(
+            screenX,
+            screenY,
+            view.zoom,
+            view.currentXOffset,
+            view.currentYOffset,
+            sizes,
+            currentPage,
+        ) ?: return null
 
         if (outPageIndex != null && outPageIndex.isNotEmpty()) {
-            outPageIndex[0] = targetPage
+            outPageIndex[0] = hit.pageIndex
         }
-
-        return PointF(normalizedX, normalizedY)
+        return PointF(hit.x, hit.y)
     }
 
     private fun normalizedToScreen(pageIndex: Int, normalizedX: Float, normalizedY: Float): PointF? {
         val view = pdfView ?: return null
-        if (!isPdfViewReady()) return null
-        if (pageIndex < 0 || pageIndex >= totalPages) return null
-
-        val zoom = view.zoom
-        val offsetX = view.currentXOffset
-        val offsetY = view.currentYOffset
-
-        val pageSize = view.getPageSize(pageIndex)
-        val pageWidth = pageSize.width
-        val pageHeight = pageSize.height
-
-        val pageStartY = getPageOffsetY(pageIndex)
-        val docX = normalizedX * pageWidth
-        val docY = pageStartY + normalizedY * pageHeight
-
-        val screenX = docX * zoom + offsetX
-        val screenY = docY * zoom + offsetY
-
-        return PointF(screenX, screenY)
+        val sizes = pageSizes() ?: return null
+        val screen = AnnotationGeometry.normalizedToScreen(
+            pageIndex,
+            normalizedX,
+            normalizedY,
+            view.zoom,
+            view.currentXOffset,
+            view.currentYOffset,
+            sizes,
+        ) ?: return null
+        return PointF(screen.x, screen.y)
     }
 
     private fun commitStroke(stroke: AnnotationStroke) {
@@ -648,158 +601,6 @@ class PdfAnnotationView @JvmOverloads constructor(
         }
     }
 
-    fun exportPdf(exportPath: String) {
-        val path = currentPdfPath
-        if (path == null) {
-            Log.w(TAG, "exportPdf: no PDF loaded")
-            sendExportPdfResult(false, "No PDF loaded", null)
-            return
-        }
-
-        if (pageAnnotations.isEmpty()) {
-            IO_EXECUTOR.submit {
-                try {
-                    val src = File(path)
-                    val dst = File(exportPath)
-                    dst.parentFile?.let { if (!it.exists()) it.mkdirs() }
-                    copyFile(src, dst)
-                    sendExportPdfResult(true, "No annotations, original PDF copied", dst.absolutePath)
-                } catch (e: IOException) {
-                    Log.e(TAG, "exportPdf copy failed", e)
-                    sendExportPdfResult(false, e.message ?: "", null)
-                }
-            }
-            return
-        }
-
-        val snapshot = snapshotAnnotations()
-        val srcPath = path
-        val viewWidthPxSnapshot = getPdfViewWidthOrDefault()
-
-        IO_EXECUTOR.submit {
-            var pdfDoc: PdfDocument? = null
-            try {
-                val dstFile = File(exportPath)
-                dstFile.parentFile?.let { if (!it.exists()) it.mkdirs() }
-
-                val tmpFile = File(dstFile.parent, dstFile.name + ".tmp")
-
-                val readerProps = ReaderProperties()
-                val reader = PdfReader(srcPath, readerProps)
-                reader.setUnethicalReading(true)
-                val writer = PdfWriter(tmpFile.absolutePath)
-                pdfDoc = PdfDocument(reader, writer)
-
-                val pageCount = pdfDoc.numberOfPages
-
-                for ((pageIndex, strokes) in snapshot) {
-                    val iTextPageNum = pageIndex + 1
-
-                    if (iTextPageNum < 1 || iTextPageNum > pageCount) {
-                        Log.w(TAG, "exportPdf: pageIndex $pageIndex out of range, skipped")
-                        continue
-                    }
-                    if (strokes.isEmpty()) continue
-
-                    val page = pdfDoc.getPage(iTextPageNum)
-                    val mediaBox: Rectangle = page.mediaBox
-                    val pageWidthPt = mediaBox.width
-                    val pageHeightPt = mediaBox.height
-
-                    val pdfCanvas = PdfCanvas(page.newContentStreamAfter(), page.resources, pdfDoc)
-                    val viewWidthPx = viewWidthPxSnapshot
-
-                    for (stroke in strokes) {
-                        val pts = stroke.normalizedPoints
-                        if (pts.size < 2) continue
-
-                        val argb = stroke.color
-                        val alpha = ((argb shr 24) and 0xFF) / 255f
-                        val r = ((argb shr 16) and 0xFF) / 255f
-                        val g = ((argb shr 8) and 0xFF) / 255f
-                        val b = (argb and 0xFF) / 255f
-
-                        val strokeWidthPt = maxOf(0.5f, (stroke.width / viewWidthPx) * pageWidthPt)
-
-                        pdfCanvas.saveState()
-
-                        pdfCanvas.setStrokeColor(DeviceRgb(r, g, b))
-                        if (alpha < 1f) {
-                            val gs = PdfExtGState()
-                            gs.strokeOpacity = alpha
-                            pdfCanvas.setExtGState(gs)
-                        }
-                        pdfCanvas.setLineWidth(strokeWidthPt)
-                        pdfCanvas.setLineCapStyle(PdfCanvasConstants.LineCapStyle.ROUND)
-                        pdfCanvas.setLineJoinStyle(PdfCanvasConstants.LineJoinStyle.ROUND)
-
-                        val first = pts[0]
-                        val startX = first.x * pageWidthPt
-                        val startY = pageHeightPt * (1f - first.y)
-                        pdfCanvas.moveTo(startX.toDouble(), startY.toDouble())
-
-                        if (pts.size == 2) {
-                            val p1 = pts[1]
-                            pdfCanvas.lineTo(
-                                (p1.x * pageWidthPt).toDouble(),
-                                (pageHeightPt * (1f - p1.y)).toDouble()
-                            )
-                        } else {
-                            for (i in 1 until pts.size - 1) {
-                                val p0 = pts[i - 1]
-                                val p1 = pts[i]
-                                val p2 = pts[i + 1]
-
-                                val cp1x = (p0.x + p1.x) / 2f * pageWidthPt
-                                val cp1y = pageHeightPt * (1f - (p0.y + p1.y) / 2f)
-                                val cp2x = (p1.x + p2.x) / 2f * pageWidthPt
-                                val cp2y = pageHeightPt * (1f - (p1.y + p2.y) / 2f)
-
-                                pdfCanvas.curveTo(
-                                    cp1x.toDouble(), cp1y.toDouble(),
-                                    cp2x.toDouble(), cp2y.toDouble(),
-                                    cp2x.toDouble(), cp2y.toDouble()
-                                )
-                            }
-                            val last = pts[pts.size - 1]
-                            pdfCanvas.lineTo(
-                                (last.x * pageWidthPt).toDouble(),
-                                (pageHeightPt * (1f - last.y)).toDouble()
-                            )
-                        }
-
-                        pdfCanvas.stroke()
-                        pdfCanvas.restoreState()
-                    }
-
-                    pdfCanvas.release()
-                }
-
-                pdfDoc.close()
-                pdfDoc = null
-
-                if (!tmpFile.renameTo(dstFile)) {
-                    copyFile(tmpFile, dstFile)
-                    tmpFile.delete()
-                }
-
-                Log.d(TAG, "exportPdf success -> ${dstFile.absolutePath}")
-                sendExportPdfResult(true, "Export successful", dstFile.absolutePath)
-            } catch (e: Exception) {
-                Log.e(TAG, "exportPdf failed", e)
-                sendExportPdfResult(false, e.message ?: "", null)
-            } finally {
-                pdfDoc?.let { doc ->
-                    try {
-                        doc.close()
-                    } catch (ignored: Exception) {
-                    }
-                }
-            }
-        }
-    }
-
-    @Suppress("DEPRECATION")
     private fun sendEventToJS(eventName: String, event: WritableMap) {
         val ctx = reactContext ?: return
         val viewId = id
@@ -810,30 +611,17 @@ class PdfAnnotationView @JvmOverloads constructor(
                 return@post
             }
             try {
-                val catalyst = ctx.catalystInstance
-                if (catalyst != null) {
-                    val modernEmitter = ctx.getJSModule(RCTModernEventEmitter::class.java)
-                    if (modernEmitter != null) {
-                        modernEmitter.receiveEvent(viewId, eventName, event)
-                    } else {
-                        ctx.getJSModule(RCTEventEmitter::class.java).receiveEvent(viewId, eventName, event)
-                    }
-                } else {
-                    UIManagerHelper.getEventDispatcherForReactTag(ctx, viewId)
-                        ?.dispatchEvent(AnnotationEvent(viewId, eventName, event))
+                val dispatcher = UIManagerHelper.getEventDispatcherForReactTag(ctx, viewId)
+                if (dispatcher == null) {
+                    Log.w(TAG, "sendEventToJS: no event dispatcher, dropping event: $eventName")
+                    return@post
                 }
+                val surfaceId = UIManagerHelper.getSurfaceId(this)
+                dispatcher.dispatchEvent(AnnotationEvent(surfaceId, viewId, eventName, event))
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to send event: $eventName", e)
             }
         }
-    }
-
-    private fun sendExportPdfResult(success: Boolean, message: String, filePath: String?) {
-        val event = Arguments.createMap()
-        event.putBoolean("success", success)
-        event.putString("message", message)
-        filePath?.let { event.putString("filePath", it) }
-        sendEventToJS("onExportPdfResult", event)
     }
 
     private fun sendLoadComplete(nbPages: Int, filePath: String) {
@@ -921,39 +709,38 @@ class PdfAnnotationView @JvmOverloads constructor(
         sendEventToJS("onExportResult", event)
     }
 
-    private fun copyFile(src: File, dst: File) {
-        FileInputStream(src).use { fis ->
-            FileOutputStream(dst).use { fos ->
-                val buf = ByteArray(8192)
-                var len = fis.read(buf)
-                while (len != -1) {
-                    fos.write(buf, 0, len)
-                    len = fis.read(buf)
-                }
-                fos.flush()
-            }
-        }
-    }
-
     private fun scheduleAutoSave() {
         val path = currentPdfPath ?: return
+        val storagePath = originalPdfPath ?: path
 
         pendingSaveTask?.let { saveHandler.removeCallbacks(it) }
 
         val snapshot = snapshotAnnotations()
         val viewWidthPxSnapshot = getPdfViewWidthOrDefault()
 
-        val task = Runnable {
-            IO_EXECUTOR.submit { saveAnnotationsToDisk(path, snapshot, viewWidthPxSnapshot) }
+        val task = object : Runnable {
+            override fun run() {
+                if (pendingSaveTask === this) {
+                    pendingSaveTask = null
+                }
+                saveAnnotationsToDisk(storagePath, snapshot, viewWidthPxSnapshot)
+            }
         }
         pendingSaveTask = task
         saveHandler.postDelayed(task, SAVE_DEBOUNCE_MS)
     }
 
-    private fun saveAnnotationsToDisk(pdfPath: String, annotations: Map<Int, MutableList<AnnotationStroke>>, viewWidthPx: Float) {
+    private fun flushPendingSave() {
+        val task = pendingSaveTask ?: return
+        saveHandler.removeCallbacks(task)
+        pendingSaveTask = null
+        task.run()
+    }
+
+    private fun saveAnnotationsToDisk(storagePath: String, annotations: Map<Int, MutableList<AnnotationStroke>>, viewWidthPx: Float) {
         try {
-            val json = AnnotationPersistence.toJson(pdfPath, annotations, viewWidthPx)
-            val file = getAnnotationFile(pdfPath)
+            val json = AnnotationPersistence.toJson(storagePath, annotations, viewWidthPx)
+            val file = annotationFileFor(storagePath)
 
             val parentDir = file.parentFile
             if (parentDir != null && !parentDir.exists()) {
@@ -979,7 +766,7 @@ class PdfAnnotationView @JvmOverloads constructor(
 
             Log.d(TAG, "Saved ${annotations.size} pages -> ${file.absolutePath}")
         } catch (e: IOException) {
-            Log.e(TAG, "Save annotations failed: ${getAnnotationFile(pdfPath).absolutePath}", e)
+            Log.e(TAG, "Save annotations failed: ${annotationFileFor(storagePath).absolutePath}", e)
         }
     }
 
@@ -1042,8 +829,10 @@ class PdfAnnotationView @JvmOverloads constructor(
 
     private fun getAnnotationFile(pdfPath: String): File {
         val basePath = originalPdfPath ?: pdfPath
-        return File(basePath + ".ann.json")
+        return annotationFileFor(basePath)
     }
+
+    private fun annotationFileFor(storagePath: String): File = File(storagePath + ".ann.json")
 
     private fun readFileToString(file: File): String {
         val sb = StringBuilder(file.length().toInt())
@@ -1064,23 +853,17 @@ class PdfAnnotationView @JvmOverloads constructor(
     }
 
     private class AnnotationEvent(
+        surfaceId: Int,
         viewTag: Int,
-        private val eventName: String,
+        private val name: String,
         private val eventData: WritableMap
-    ) : Event<AnnotationEvent>(viewTag) {
+    ) : Event<AnnotationEvent>(surfaceId, viewTag) {
 
-        override fun getEventName(): String = eventName
+        override fun getEventName(): String = name
 
         override fun getEventData(): WritableMap = eventData
-    }
 
-    class AnnotationStroke(
-        val pageIndex: Int,
-        val color: Int,
-        val width: Float
-    ) {
-        val normalizedPoints = ArrayList<PointF>()
-        var timestamp: Long = System.currentTimeMillis()
+        override fun canCoalesce(): Boolean = false
     }
 
     private inner class SafePdfView(context: Context) : PDFView(context, null) {
