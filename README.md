@@ -275,6 +275,100 @@ originalPath="file:///storage/emulated/0/Documents/foo.pdf"  // 公共目录中�
 供 JS 侧展示/上传；磁盘上的 `.ann.json` 则是 `width` 为屏幕像素的持久化格式。两者都
 由同一份批注数据派生，字段结构一致。
 
+## 存储权限
+
+组件本身**不申请任何权限**，由宿主 App 负责。是否需要权限取决于 PDF/批注文件所在目录：
+
+| 文件位置 | 需要权限 |
+|---|---|
+| 应用私有目录（`filesDir`） | 无 |
+| 应用专属外部目录（`getExternalFilesDir`） | 无（但随卸载删除） |
+| 公共目录（如 `/storage/emulated/0/Documents/`，Android 10 及以下） | `WRITE_EXTERNAL_STORAGE`（运行时申请） |
+| 公共目录（Android 11+ / API 30+） | `MANAGE_EXTERNAL_STORAGE`（"所有文件访问"，特殊设置页授权） |
+
+如果你把 `originalPath` 指向公共目录，必须在宿主工程完成以下两步。
+
+### 1. AndroidManifest.xml 声明
+
+```xml
+<!-- Android 10 及以下：传统存储权限 -->
+<uses-permission
+    android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+    android:maxSdkVersion="29" />
+
+<!-- Android 11+：所有文件访问权限 -->
+<uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+
+<application
+    android:requestLegacyExternalStorage="true"
+    ... >
+```
+
+`requestLegacyExternalStorage="true"` 让 Android 10 沿用传统存储模型（Android 11+ 忽略此属性）。
+
+### 2. 运行时协商（低版本弹窗 / 高版本跳设置页）
+
+```kotlin
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
+import android.os.Environment
+import android.provider.Settings
+import androidx.core.content.ContextCompat
+
+private fun ensureStoragePermission(activity: Activity) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        // Android 11+：必须引导用户到"所有文件访问"设置页手动授权
+        if (!Environment.isExternalStorageManager()) {
+            activity.startActivity(
+                Intent(
+                    Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                    Uri.parse("package:${activity.packageName}")
+                )
+            )
+        }
+    } else {
+        // Android 10 及以下：普通运行时权限弹窗
+        if (ContextCompat.checkSelfPermission(
+                activity, Manifest.permission.WRITE_EXTERNAL_STORAGE
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            activity.requestPermissions(
+                arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE), REQUEST_STORAGE
+            )
+        }
+    }
+}
+```
+
+授权结果回调：
+
+```kotlin
+override fun onRequestPermissionsResult(
+    requestCode: Int, permissions: Array<out String>, grantResults: IntArray
+) {
+    super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+    if (requestCode == REQUEST_STORAGE &&
+        grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED
+    ) {
+        // 授权成功后重新加载 PDF / 刷新组件
+    }
+}
+```
+
+### 建议与注意事项
+
+- **上架 Google Play**：`MANAGE_EXTERNAL_STORAGE` 属于受限权限，需要声明具体用途并经
+  官方审核，可能被拒。若仅需暂存批注，推荐改用**应用专属外部目录**
+  （`context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS)`），完全免权限，但
+  数据随卸载删除；如需"卸载不丢"，再考虑公共目录 + `MANAGE_EXTERNAL_STORAGE`。
+- **鸿蒙/国产 ROM**：部分机型对"所有文件访问"入口有差异（如"文件管理权限"），需在
+  系统设置中手动开启；组件无法代替用户完成。
+- 权限申请时机建议在**打开 PDF 前**完成（如点击打开文档时先 `ensureStoragePermission`，
+  授权后再渲染组件），避免组件因无权限读不到文件或写不了批注。
+
 ## 许可证说明
 
 本组件依赖 iText7（AGPL 许可）。若以开源形式发布，AGPL 兼容；**商用闭源发布前请评估
