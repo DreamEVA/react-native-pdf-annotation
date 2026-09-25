@@ -11,7 +11,6 @@ import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import java.io.File
-import java.util.UUID
 import kotlin.concurrent.thread
 
 object HostActivities {
@@ -77,12 +76,12 @@ class PdfDocumentPickerModule(
         thread(name = "pdf-document-copy") {
             try {
                 val name = displayName(uri)
-                val dir = File(reactContext.cacheDir, UUID.randomUUID().toString())
-                if (!dir.mkdirs() && !dir.isDirectory) {
+                val dest = stableCacheFile(uri)
+                dest.parentFile?.mkdirs()
+                if (dest.parentFile?.isDirectory != true) {
                     promise.reject("COPY_FAILED", "Cannot create cache directory")
                     return@thread
                 }
-                val dest = File(dir, name)
                 reactContext.contentResolver.openInputStream(uri).use { input ->
                     if (input == null) {
                         promise.reject("COPY_FAILED", "Cannot open selected PDF")
@@ -104,6 +103,11 @@ class PdfDocumentPickerModule(
     }
 
     override fun onNewIntent(intent: Intent) = Unit
+
+    private fun stableCacheFile(uri: Uri): File {
+        val hash = uri.toString().hashCode().toUInt().toString(16)
+        return File(File(reactContext.cacheDir, "pdf-annotation"), "$hash.pdf")
+    }
 
     private fun displayName(uri: Uri): String {
         val raw = reactContext.contentResolver.query(

@@ -86,7 +86,6 @@ class PdfAnnotationView @JvmOverloads constructor(
     private val redoStack = ArrayDeque<AnnotationStroke>()
 
     private var currentPdfPath: String? = null
-    private var originalPdfPath: String? = null
     private val saveHandler = Handler(Looper.getMainLooper())
     private var pendingSaveTask: Runnable? = null
 
@@ -311,10 +310,6 @@ class PdfAnnotationView @JvmOverloads constructor(
         }
     }
 
-    fun setOriginalPath(originalPath: String?) {
-        originalPdfPath = originalPath?.replace("file://", "")
-    }
-
     private fun applyStableZoom(scale: Float) {
         val view = pdfView ?: return
         if (!isPdfViewReady()) return
@@ -418,7 +413,7 @@ class PdfAnnotationView @JvmOverloads constructor(
     fun loadPdf(filePath: String) {
         val normalizedPath = filePath.replace("file://", "")
 
-        // 切换文档前先写入上一份尚未落盘的笔迹。存储路径在调度保存时确定。
+        // 切换文档前先写入上一份尚未落盘的笔迹。存储路径在调度保存时按当时的 filePath 确定。
         flushPendingSave()
 
         currentPdfPath = normalizedPath
@@ -710,8 +705,7 @@ class PdfAnnotationView @JvmOverloads constructor(
     }
 
     private fun scheduleAutoSave() {
-        val path = currentPdfPath ?: return
-        val storagePath = originalPdfPath ?: path
+        val storagePath = currentPdfPath ?: return
 
         pendingSaveTask?.let { saveHandler.removeCallbacks(it) }
 
@@ -827,10 +821,7 @@ class PdfAnnotationView @JvmOverloads constructor(
         return copy
     }
 
-    private fun getAnnotationFile(pdfPath: String): File {
-        val basePath = originalPdfPath ?: pdfPath
-        return annotationFileFor(basePath)
-    }
+    private fun getAnnotationFile(pdfPath: String): File = annotationFileFor(pdfPath)
 
     private fun annotationFileFor(storagePath: String): File = File(storagePath + ".ann.json")
 

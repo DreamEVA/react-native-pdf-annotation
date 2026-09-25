@@ -39,11 +39,6 @@ class PdfAnnotationViewManager : SimpleViewManager<PdfAnnotationView>() {
         }
     }
 
-    @ReactProp(name = "originalPath")
-    fun setOriginalPath(view: PdfAnnotationView, originalPath: String?) {
-        view.setOriginalPath(originalPath)
-    }
-
     @ReactProp(name = "filePath")
     fun setFilePath(view: PdfAnnotationView, filePath: String?) {
         filePath?.let { view.loadPdf(it) }

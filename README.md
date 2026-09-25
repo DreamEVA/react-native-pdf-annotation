@@ -128,8 +128,7 @@ export default function PdfEditor() {
     <PdfAnnotationView
       ref={pdfRef}
       style={{ flex: 1 }}
-      filePath={`file://${privatePdfPath}`}      // 实际加载的 PDF 路径
-      originalPath={`file://${publicPdfPath}`}   // 公共目录原始路径（决定批注存哪，见下文）
+      filePath={`file://${pdfPath}`}             // 实际加载的 PDF，批注写在该文件旁
       annotationMode={true}                       // true = 手写模式；false = 纯阅读模式
       strokeColor="#FF0000"
       strokeWidth={5}
@@ -158,8 +157,7 @@ export default function PdfEditor() {
 
 | prop | 类型 | 默认 | 说明 |
 |---|---|---|---|
-| `filePath` | string | - | 实际加载的 PDF 文件路径（`file://` 或绝对路径），赋值即触发加载 |
-| `originalPath` | string | - | PDF 的原始存放路径，**决定批注文件写入位置**（详见下文） |
+| `filePath` | string | - | 实际加载的 PDF 文件路径（`file://` 或绝对路径），赋值即触发加载。批注文件写在该路径旁 |
 | `annotationMode` | boolean | false | `true` 时单指绘制批注，多指仍可缩放/滚动；`false` 为纯阅读模式 |
 | `strokeColor` | string | 红色 | 画笔颜色，如 `#FF0000` |
 | `strokeWidth` | number | 5 | 画笔宽度（屏幕像素） |
@@ -207,34 +205,22 @@ pdfRef.current?.exportAnnotations('/sdcard/Documents/annotations');
 组件会在批注变化后 **300ms 防抖**自动把全部批注序列化为 JSON，写到磁盘文件：
 
 ```
-批注文件路径 = (originalPath ?? filePath) 去掉 "file://" 前缀 + ".ann.json"
+批注文件路径 = filePath 去掉 "file://" 前缀 + ".ann.json"
 ```
 
-即：**优先以 `originalPath` 为基准，未传 `originalPath` 时以 `filePath` 为基准**，批注文件与
-对应 PDF 同名、同目录，后缀 `.ann.json`。
-
-### 只传 filePath
+批注文件与 PDF 同目录，文件名为 PDF 文件名加 `.ann.json`。`filePath` 每次打开必须是同一个字符串，否则会读不到已有批注。
 
 ```tsx
 filePath="file:///data/user/0/com.example/files/foo.pdf"
 // 批注文件 → /data/user/0/com.example/files/foo.pdf.ann.json
 ```
 
-批注文件与 PDF 位于同一目录。`filePath` 指向应用私有目录时，批注随应用卸载删除。
+- 路径位于应用私有目录或应用专属外部目录时，批注随应用卸载删除，无需存储权限
+- 路径位于公共目录时，卸载应用不会删除批注。宿主需按下一节申请存储权限
+- 删除 PDF 时不会自动删除旁边的 `.ann.json`
+- 再次打开同一 `filePath` 时，从 `.ann.json` 恢复批注与撤销栈。重做栈不恢复
 
-### 同时传 originalPath（推荐）
-
-```tsx
-filePath="file:///data/user/0/com.example/files/foo.pdf"      // 复制到私有目录的副本，供组件加载
-originalPath="file:///storage/emulated/0/Documents/foo.pdf"  // 公共目录中的原始 PDF
-// 批注文件 → /storage/emulated/0/Documents/foo.pdf.ann.json
-```
-
-PDF 被复制到私有目录时，批注仍写在 `originalPath` 旁：
-
-- `originalPath` 位于公共目录时，卸载应用不会删除批注
-- 批注文件与原始 PDF 同目录，文件名为 PDF 文件名加 `.ann.json`。删除 PDF 时不会自动删除该文件
-- 再次打开同一 `originalPath` 时，从 `.ann.json` 恢复批注与撤销栈。重做栈不恢复
+选择器若每次把 PDF 复制到新的缓存路径，应先复制到固定路径，再把该路径作为 `filePath`。需要跨卸载保留时，把 PDF 放到已授权的公共目录，并把该路径作为 `filePath`。
 
 ### 写入可靠性与格式
 
@@ -282,7 +268,7 @@ PDF 被复制到私有目录时，批注仍写在 `originalPath` 旁：
 | 公共目录（如 `/storage/emulated/0/Documents/`，Android 10 及以下） | `WRITE_EXTERNAL_STORAGE`（运行时申请） |
 | 公共目录（Android 11+ / API 30+） | `MANAGE_EXTERNAL_STORAGE`（"所有文件访问"，特殊设置页授权） |
 
-`originalPath` 指向公共目录时，宿主工程需要完成以下配置。
+`filePath` 指向公共目录时，宿主工程需要完成以下配置。
 
 ### 1. AndroidManifest.xml 声明
 

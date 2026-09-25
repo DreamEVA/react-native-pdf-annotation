@@ -10,9 +10,8 @@
  *  - 事件：onLoadComplete / onPageChanged / onTableOfContents /
  *          onAnnotationChanged / onError / onExportResult
  *
- * 选文件由示例内的 PdfDocumentPicker 完成，并复制到应用私有缓存。
- * 每次复制使用新目录，因此 originalPath 按来源 URI 固定，用于关联同一文档的批注。
- * 批注位于应用缓存，随卸载删除。需在卸载后保留时，将 originalPath 指向公共目录，并按 README 配置存储权限。
+ * 选文件由示例内的 PdfDocumentPicker 完成，并复制到应用缓存中按来源固定的路径。
+ * filePath 即该路径，批注写在 PDF 旁，随卸载删除。需在卸载后保留时，将 filePath 指向已授权的公共目录。
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -67,24 +66,6 @@ function dirname(fileUrl: string): string {
   return idx >= 0 ? p.slice(0, idx) : p;
 }
 
-/** 按来源 URI 生成稳定的批注存储路径。 */
-function hashString(value: string): string {
-  let hash = 2166136261;
-  for (let i = 0; i < value.length; i++) {
-    hash ^= value.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  return (hash >>> 0).toString(16);
-}
-
-function stableOriginalPath(localUri: string, sourceUri: string): string {
-  const decoded = decodeURI(localUri);
-  const marker = '/cache/';
-  const idx = decoded.indexOf(marker);
-  const cacheRoot = idx >= 0 ? decoded.slice(0, idx + marker.length - 1) : dirname(decoded);
-  return `${cacheRoot}/pdf-annotation/${hashString(sourceUri)}.pdf`;
-}
-
 function App() {
   const isDarkMode = useColorScheme() === 'dark';
   return (
@@ -100,7 +81,6 @@ function Demo() {
 
   // 文档
   const [pdfPath, setPdfPath] = useState<string | null>(null);
-  const [originalPath, setOriginalPath] = useState<string | null>(null);
   const [fileName, setFileName] = useState('');
 
   // 画笔 / 缩放
@@ -130,7 +110,6 @@ function Demo() {
       const file = await PdfDocumentPicker.pick();
       // localUri 为百分号编码。原生层只去掉 file:// 前缀，不解码，需先得到真实路径。
       const localPath = decodeURI(file.localUri);
-      setOriginalPath(stableOriginalPath(file.localUri, file.uri));
       setPdfPath(localPath);
       setFileName(file.name ?? 'document.pdf');
       setPage(0);
@@ -204,7 +183,6 @@ function Demo() {
             ref={pdfRef}
             style={StyleSheet.absoluteFill}
             filePath={pdfPath}
-            originalPath={originalPath ?? undefined}
             annotationMode={annotationMode}
             strokeColor={strokeColor}
             strokeWidth={strokeWidth}

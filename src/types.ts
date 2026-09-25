@@ -47,7 +47,6 @@ export interface PdfAnnotationViewRef {
 
 export interface PdfAnnotationViewProps extends ViewProps {
   filePath?: string;
-  originalPath?: string;
   annotationMode?: boolean;
   strokeColor?: string;
   strokeWidth?: number;
